@@ -78,10 +78,7 @@ def load_config(path: str = "config.json") -> None:
         f"Alignment {AXIS_MIN}..{AXIS_MAX}, Tolerance {TOL_MIN}..{TOL_MAX}, "
         f"Delay {ROUND_DELAY_SEC}s."
     )
-
-load_config()
     
-
 # =========================
 # OOP Models
 # =========================
