@@ -1,0 +1,18 @@
+[
+  {
+    "name": "Pixie",
+    "alignment": {"law_chaos": 1, "light_dark": 2},
+    "personality": "PLAYFUL",
+    "patience": 5,
+    "tolerance": 4,
+    "rapport_needed": 2
+  },
+  {
+    "name": "Onmoraki",
+    "alignment": {"law_chaos": -2, "light_dark": -2},
+    "personality": "MOODY",
+    "patience": 4,
+    "tolerance": 3,
+    "rapport_needed": 2
+  }
+]

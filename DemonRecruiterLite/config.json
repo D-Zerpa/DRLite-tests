@@ -1,0 +1,7 @@
+{
+  "rapport":   { "min": -3, "max": 3 },
+  "alignment": { "min": -5, "max": 5 },
+  "tolerance": { "min": 1,  "max": 5 },
+  "rng_seed":  42,
+  "ui": { "round_delay_seconds": 0 }
+}

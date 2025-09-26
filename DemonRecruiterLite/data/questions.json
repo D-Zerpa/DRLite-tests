@@ -1,0 +1,12 @@
+[
+  {
+    "id": "q_mercy_1",
+    "text": "Un enemigo derrotado suplica por su vida. ¿Qué haces?",
+    "tags": ["mercy", "order", "ruthless"],               
+    "choices": {
+      "Mostrar piedad":         {"dLC": 0, "dLD": 1,  "dRapport": 1,  "tags": ["mercy","light"]},
+      "Capturarlo y juzgarlo":  {"dLC": 1, "dLD": 0,  "dRapport": 0,  "tags": ["order","justice"]},
+      "Acabar con él":          {"dLC": 0, "dLD": -1, "dRapport": -1, "tags": ["ruthless","dark"]}
+    }
+  }
+]
