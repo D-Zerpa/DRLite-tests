@@ -5,8 +5,10 @@ Description:
     - Made to be implemented in Cognitas Discord Bot.
 """
 
+from __future__ import annotations
 from dataclasses import dataclass
 from typing import Dict, List, Tuple, Optional
+from enum import Enum
 import random
 
 # ====== Defaults (used if config.json is missing or incomplete) ======
@@ -83,6 +85,13 @@ def load_config(path: str = "config.json") -> None:
 # OOP Models
 # =========================
 
+class Personality(Enum):
+    PLAYFUL = "PLAYFUL"
+    CHILDISH = "CHILDISH"
+    MOODY = "MOODY"
+    CUNNING = "CUNNING"
+    PROUD = "PROUD"
+
 @dataclass
 class Alignment:
     """Aligment axis: LC (Law/Chaos), LD (Light/Dak)"""
@@ -106,24 +115,159 @@ class Question:
     choices: Dict[str, ChoiceEffect]
     tags: List[str]
 
-@dataclass(eq= False)
+@dataclass(eq= False, slots = True)
 class Demon:
 
     name: str
     alignment: Alignment
-    personality: random.choice("PLAYFUL","CHILDISH","MOODY","CUNNING","PROUD")
+    personality: Personality
     patience: int = 4
     tolerance: int = 3
     rapport_needed: int = 2
-    available = bool = field(default=True, repr=False, compare=False)
-
-    def pick_question(self, session):
-        pass
+    available: bool = field(default=True, repr=False, compare=False)
 
 
-    def reaction(self, choice_effect):
-        pass
+    def react(self, effect) -> tuple[int, int]:
+        """
+        Compute the demon's reaction to the chosen option.
 
+        PHASE A (prototype): only forward the rapport change defined by the option.
+        Do NOT modify tolerance or any demon/session state here.
+
+        Parameters
+        ----------
+        effect : dict or object with attribute 'dRapport'
+            The effect payload from the chosen option, e.g.:
+            {"dLC": int, "dLD": int, "dRapport": int, ...}
+            In this phase we only care about 'dRapport'.
+
+        Returns
+        -------
+        (delta_rapport, delta_tolerance) : tuple[int, int]
+            For this phase: (dRapport, 0).
+        """
+        # 1) Read dRapport flexibly: dict first, then fallback to attribute.
+        try:
+            d_rep = effect.get("dRapport", 0)
+        except AttributeError:
+            d_rep = getattr(effect, "dRapport", 0)
+
+        # 2) Minimal validation.
+        if not isinstance(d_rep, (int, float)):
+            raise TypeError("dRapport must be numeric (int or float).")
+
+        # 3) Normalize to int for consistent arithmetic/clamping elsewhere.
+        d_rep = int(d_rep)
+
+        # 4) In this phase, tolerance does not change.
+        delta_tolerance = 0
+
+        # 5) Return the deltas (session applies them and clamps globally).
+        return d_rep, delta_tolerance
+
+
+class Player:
+
+    def __init__ (self, core_alignment: Aligment):
+
+        self.core_alignment = core_alignment
+        self.stance_alignment = Aligment(law_chaos = core_alignment.law_chaos, light_dark = core_alignment.light_dark)
+        self.roster: list[Demon] = []
+
+
+     def relax_posture(self, step: int = 1) -> None:
+        """
+        Move stance 1 step per axis toward core, then clamp.
+        """
+        for attr in ("law_chaos", "light_dark"):
+            s = getattr(self.stance_alignment, attr)
+            c = getattr(self.core_alignment, attr)
+
+            # Direction: -1, 0, or +1
+            direction = 0 if s == c else (1 if c > s else -1)
+
+            delta = direction * min(step, abs(c - s))
+            setattr(self.stance_alignment, attr, s + delta)
+
+        self.stance_alignment.clamp()
+
+@dataclass
+class NegotiationSession:
+
+    player: Player
+    demon: Demon
+    question_pool: List[Question]
+
+    # State
+
+    rapport: int = 0 
+    turns_left: int = field(init=False)
+    in_progress: bool = True
+    recruited: bool = False
+    fled: bool = False
+    round_no: int = 1
+
+    # Avoid repeating questions within the session
+
+    _user_question_ids: Set[str] = field(default_factory = set, repr = False)
+
+    def __post_init__(self):
+        """Initialize values that depend on demon at runtime."""
+        self.turns_left = self.demon.patience
+
+
+    def pick_question(self) -> "Question":
+        """
+        Pick a question for this turn. Minimal version:
+        - Prefer questions not used in this session.
+        - If none left, reset and use the full pool.
+        - Choose randomly.
+        """
+        candidates = [q for q in self.questions_pool if q.id not in self._used_question_ids]
+        if not candidates:
+            candidates = self.questions_pool[:]     # reset
+            self._used_question_ids.clear()
+
+        q = random.choice(candidates)
+        self._used_question_ids.add(q.id)
+        return q
+
+    def ask(self) -> Dict[str, int]:
+        """
+        Show a question and collect a valid choice.
+        Returns the chosen option's effect dict, e.g. {"dLC":0, "dLD":1, "dRapport":1}.
+        """
+        q = self.pick_question()
+
+        # 1) Print question and numbered options
+        print(f"\nQ: {q.text}")
+        options = list(q.choices.items())  # [(label, effect_dict), ...]  (dict preserves insertion order)
+        for idx, (label, _) in enumerate(options, start=1):
+            print(f"  {idx}) {label}")
+
+        # 2) Read a valid index
+        while True:
+            raw = input("Choose an option number: ").strip()
+            if raw.isdigit():
+                i = int(raw)
+                if 1 <= i <= len(options):
+                    _, effect = options[i - 1]
+                    return effect
+            print("Invalid choice. Try again.")
+
+
+        
+
+def main():
+    load_config("config.json")   # 1) set limits/seed/UI first
+    demons = load_demons("data/demons.json")
+    questions = load_questions("data/questions.json")
+
+    player = Player(core_alignment=Alignment(0, 0),
+                    stance_alignment=Alignment(0, 0))
+    demon = demons[0]
+    session = NegotiationSession(player, demon, questions)
+    run_loop(session)
 
 if __name__ == "__main__":
     main()
