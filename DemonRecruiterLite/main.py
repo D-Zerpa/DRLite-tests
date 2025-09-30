@@ -602,11 +602,11 @@ def main():
         pass
 
     player, demons, questions_pool = build_prototype_data()
-    nivel_dificultad = read_difficulty()
-    demon_actual = choose_demon(demons)
-    sesion = NegotiationSession(player=player, demon=demon_actual, question_pool=questions_pool)
-    run_game_loop(sesion, nivel_dificultad)
-    summarize_session(sesion)
+    diff_level = read_difficulty()
+    current_demon = choose_demon(demons)
+    session = NegotiationSession(player=player, demon=current_demon, question_pool=questions_pool)
+    run_game_loop(session, diff_level)
+    summarize_session(session)
 
 if __name__ == "__main__":
     main()
