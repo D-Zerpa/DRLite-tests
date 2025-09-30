@@ -7,9 +7,10 @@ Description:
 
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple, Optional, TypedDict, Set
 from enum import Enum
 import random
+import time
 
 # ====== Defaults (used if config.json is missing or incomplete) ======
 RAPPORT_MIN, RAPPORT_MAX = -3, 3
@@ -92,13 +93,13 @@ class Personality(Enum):
     CUNNING = "CUNNING"
     PROUD = "PROUD"
 
-@dataclass
+@dataclass(slots=True)
 class Alignment:
     """Aligment axis: LC (Law/Chaos), LD (Light/Dak)"""
     law_chaos: int = 0
     light_dark: int = 0
 
-    def clamp(self, lo: int = -5, hi: int = 5) -> None:
+    def clamp(self) -> None:
         """ Adjusts the values to the ranges """
         self.law_chaos  = max(AXIS_MIN, min(AXIS_MAX, self.law_chaos))
         self.light_dark = max(AXIS_MIN, min(AXIS_MAX, self.light_dark))
@@ -107,12 +108,18 @@ class Alignment:
         """ Compare with other alignments to make decisions """
         return abs(self.law_chaos - other.law_chaos) + abs(self.light_dark - other.light_dark)
 
-@dataclass
+class Effect(TypedDict, total=False):
+    dLC: int
+    dLD: int
+    dRapport: int
+    tags: List[str]
+
+@dataclass(slots=True)
 class Question:
     """Loads the Question from the .json and transforms it into an object"""
     id: str 
     text: str
-    choices: Dict[str, ChoiceEffect]
+    choices: Dict[str, Effect]
     tags: List[str]
 
 @dataclass(eq= False, slots = True)
@@ -166,14 +173,16 @@ class Demon:
         return d_rep, delta_tolerance
 
 
+@dataclass(slots=True, eq=False)
 class Player:
+    core_alignment: Alignment
+    stance_alignment: Alignment = field(init=False)
+    roster: List[Demon] = field(default_factory=list)
 
-    def __init__ (self, core_alignment: Alignment):
-
-        self.core_alignment = core_alignment
-        self.stance_alignment = Alignment(law_chaos = core_alignment.law_chaos, light_dark = core_alignment.light_dark)
-        self.roster: list[Demon] = []
-
+    def __post_init__(self) -> None:
+        self.stance_alignment = Alignment(
+            law_chaos=self.core_alignment.law_chaos,
+            light_dark=self.core_alignment.light_dark)
 
     def relax_posture(self, step: int = 1):
         """
@@ -206,6 +215,7 @@ class NegotiationSession:
     recruited: bool = False
     fled: bool = False
     round_no: int = 1
+    rng: Optional[random.Random] = None
 
     # Avoid repeating questions within the session
 
@@ -214,6 +224,13 @@ class NegotiationSession:
     def __post_init__(self):
         """Initialize values that depend on demon at runtime."""
         self.turns_left = self.demon.patience
+        
+        if self.rng is None:
+            try:
+                # prefer your config seed if available
+                self.rng = random.Random(RNG_SEED) if RNG_SEED is not None else random.Random()
+            except NameError:
+                self.rng = random.Random()
 
 
     def pick_question(self) -> "Question":
@@ -306,7 +323,7 @@ class NegotiationSession:
             f"Distance: {dist}"
         )
    
-    def difficulty(self, nivel: int) -> None:
+    def difficulty(self, level: int) -> None:
         """
         Light pressure mechanics:
         - Decrease rapport randomly by 0..(nivel//2), not below the minimum.
@@ -600,6 +617,14 @@ def main():
     except NameError:
         # If load_config is not available yet, you can skip it during the first run.
         pass
+
+    try:
+        opcion = show_menu(sesion)
+    except (KeyboardInterrupt, EOFError):
+        print("\nSaliendo…")
+        sesion.in_progress = False
+        sesion.fled = True
+        return
 
     player, demons, questions_pool = build_prototype_data()
     diff_level = read_difficulty()
