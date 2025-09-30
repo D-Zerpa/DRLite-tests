@@ -6,7 +6,7 @@ Description:
 """
 
 from __future__ import annotations
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Dict, List, Tuple, Optional
 from enum import Enum
 import random
@@ -168,14 +168,14 @@ class Demon:
 
 class Player:
 
-    def __init__ (self, core_alignment: Aligment):
+    def __init__ (self, core_alignment: Alignment):
 
         self.core_alignment = core_alignment
-        self.stance_alignment = Aligment(law_chaos = core_alignment.law_chaos, light_dark = core_alignment.light_dark)
+        self.stance_alignment = Alignment(law_chaos = core_alignment.law_chaos, light_dark = core_alignment.light_dark)
         self.roster: list[Demon] = []
 
 
-     def relax_posture(self, step: int = 1) -> None:
+    def relax_posture(self, step: int = 1):
         """
         Move stance 1 step per axis toward core, then clamp.
         """
@@ -209,7 +209,7 @@ class NegotiationSession:
 
     # Avoid repeating questions within the session
 
-    _user_question_ids: Set[str] = field(default_factory = set, repr = False)
+    _used_question_ids: Set[str] = field(default_factory = set, repr = False)
 
     def __post_init__(self):
         """Initialize values that depend on demon at runtime."""
@@ -223,9 +223,9 @@ class NegotiationSession:
         - If none left, reset and use the full pool.
         - Choose randomly.
         """
-        candidates = [q for q in self.questions_pool if q.id not in self._used_question_ids]
+        candidates = [q for q in self.question_pool if q.id not in self._used_question_ids]
         if not candidates:
-            candidates = self.questions_pool[:]     # reset
+            candidates = self.question_pool[:]     # reset
             self._used_question_ids.clear()
 
         q = random.choice(candidates)
@@ -256,18 +256,357 @@ class NegotiationSession:
             print("Invalid choice. Try again.")
 
 
-        
+    def process_answer(self, effect: Dict[str, int]) -> None:
+        """
+        Apply the chosen effect to stance and session metrics.
+        - Update stance (dLC/dLD) and clamp.
+        - Ask demon to react (get delta_rapport).
+        - Clamp rapport.
+        - Decrement turns and relax player's posture.
+        - Print a compact summary.
+        """
+        # 1) Apply stance deltas
+        d_lc = int(effect.get("dLC", 0))
+        d_ld = int(effect.get("dLD", 0))
+        self.player.stance_alignment.law_chaos += d_lc
+        self.player.stance_alignment.light_dark += d_ld
+        self.player.stance_alignment.clamp()  # keeps stance within global bounds
+
+        # 2) Demon reaction → rapport delta (tolerance stays unchanged in Phase A)
+        d_rep, _ = self.demon.react(effect)
+
+        # 3) Clamp rapport using global limits
+        new_rapport = self.rapport + d_rep
+        self.rapport = max(RAPPORT_MIN, min(RAPPORT_MAX, new_rapport))
+
+        # 4) Turns and posture relaxation
+        self.turns_left -= 1
+        self.player.relax_posture()
+
+        # 5) Summary
+        print(f"Δ Stance: LC {d_lc:+}, LD {d_ld:+} | Rapport: {self.rapport} | Turns left: {self.turns_left}")
+
+
+
+    def show_status(self) -> None:
+        """
+        Print the current session HUD:
+        - round, turns_left, rapport
+        - player's stance alignment
+        - demon name/alignment and Manhattan distance
+        """
+        stance = self.player.stance_alignment
+        dist = stance.manhattan_distance(self.demon.alignment)
+        print(
+            f"\n-- Session --\n"
+            f"Round: {self.round_no} | Turns left: {self.turns_left} | Rapport: {self.rapport}\n"
+            f"Stance LC/LD: ({stance.law_chaos}, {stance.light_dark})\n"
+            f"Demon: {self.demon.name} | Demon LC/LD: "
+            f"({self.demon.alignment.law_chaos}, {self.demon.alignment.light_dark}) | "
+            f"Distance: {dist}"
+        )
+   
+    def difficulty(self, nivel: int) -> None:
+        """
+        Light pressure mechanics:
+        - Decrease rapport randomly by 0..(nivel//2), not below the minimum.
+        - Optionally nudge stance 1 step away from the demon with probability nivel/10.
+        Then clamp stance and keep state consistent.
+        """
+        # 1) Rapport pressure
+        drop = random.randint(0, max(0, nivel // 2))
+        self.rapport = max(RAPPORT_MIN, self.rapport - drop)
+
+        # 2) Optional nudge away from the demon (probability nivel/10)
+        if random.random() < (nivel / 10.0):
+            axis = random.choice(("law_chaos", "light_dark"))
+            s = getattr(self.player.stance_alignment, axis)
+            d = getattr(self.demon.alignment, axis)
+            # Move 1 step away from the demon along the chosen axis
+            if s < d:
+                setattr(self.player.stance_alignment, axis, s - 1)
+            elif s > d:
+                setattr(self.player.stance_alignment, axis, s + 1)
+            # If equal, do nothing (already centered relative to demon)
+            self.player.stance_alignment.clamp()
+
+    def check_union(self) -> None:
+        """
+        If distance <= demon.tolerance AND rapport >= demon.rapport_needed,
+        mark as recruited and stop the session.
+        """
+        dist = self.player.stance_alignment.manhattan_distance(self.demon.alignment)
+        if dist <= self.demon.tolerance and self.rapport >= self.demon.rapport_needed:
+            print(f"{self.demon.name} seems willing to join you.")
+            self.recruited = True
+            self.in_progress = False
+
+    def check_fled(self) -> None:
+        """
+        If distance > demon.tolerance + 2 OR turns_left <= 0,
+        mark as fled and stop the session.
+        """
+        dist = self.player.stance_alignment.manhattan_distance(self.demon.alignment)
+        if dist > self.demon.tolerance + 2 or self.turns_left <= 0:
+            print(f"{self.demon.name} loses interest and leaves.")
+            self.fled = True
+            self.in_progress = False
+
+    def finish_union(self) -> None:
+        """If recruited, add demon to the roster, mark it unavailable, and notify."""
+        if self.recruited:
+            if self.demon not in self.player.roster:
+                self.player.roster.append(self.demon)
+            # Match your field name; if you used 'available' in Demon, set that.
+            if hasattr(self.demon, "available"):
+                self.demon.available = False
+            print(f"{self.demon.name} has joined your roster!")    
+
+    def finish_fled(self) -> None:
+            """If fled, notify."""
+            if self.fled:
+                print(f"The negotiation with {self.demon.name} ended. The demon walked away.")
+
+def show_menu(session) -> str:
+    """
+    Print the console menu and return the chosen option as a string.
+    If the session already ended, return "0".
+    """
+    if not session.in_progress:
+        print("La negociación ha terminado...")
+        return "0"
+
+    print("\n¿Qué deseas hacer?")
+    print("1) Responder la siguiente pregunta")
+    print("2) Bromear (minijuego rápido para ajustar rapport)")
+    print("3) Mostrar estado de la sesión")
+    print("4) Intentar cerrar trato ahora (evaluar unión)")
+    print("5) Despedirse (terminar negociación)")
+
+    valid = {"1", "2", "3", "4", "5"}
+    while True:
+        choice = input("Elige una opción (1-5): ").strip()
+        if choice in valid:
+            return choice
+        print("OPCION NO VALIDA. Intenta de nuevo.")
+
+
+def dispatch_action(session, option: str) -> None:
+    """
+    Dispatch the selected option to the corresponding session action.
+    Follows your spec strictly.
+    """
+    if option == "1":
+        # Ask a question and process the returned effect
+        effect = session.ask()                 # returns a dict like {"dLC":0,"dLD":1,"dRapport":1}
+        session.process_answer(effect)
+
+    elif option == "2":
+        # Simple rapport mini-game: guess a number 0..2
+        secret = random.randint(0, 2)
+
+        while True:
+            raw = input("Adivina un número (0-2): ").strip()
+            if raw in {"0", "1", "2"}:
+                guess = int(raw)
+                break
+            print("Entrada inválida. Intenta de nuevo (0, 1 o 2).")
+
+        if guess == secret:
+            print("¡Correcto!")
+            # Clamp rapport using your global limits
+            try:
+                # Prefer globals if already present in this module
+                new_val = session.rapport + 2
+                session.rapport = min(RAPPORT_MAX, new_val)
+            except NameError:
+                # Fallback: no globals visible; be explicit or import from your settings module
+                # Example fallback clamps to [-3, 3]
+                session.rapport = min(3, session.rapport + 2)
+        else:
+            print("Incorrecto.")
+            try:
+                new_val = session.rapport - 1
+                session.rapport = max(RAPPORT_MIN, new_val)
+            except NameError:
+                # Fallback: clamp to [-3, 3] if constants not in scope
+                session.rapport = max(-3, session.rapport - 1)
+
+    elif option == "3":
+        # Show current session HUD
+        session.show_status()
+
+    elif option == "4":
+        # Try to close the deal now
+        session.check_union()
+
+    elif option == "5":
+        # End the negotiation voluntarily
+        session.in_progress = False
+        session.fled = True
+        print(f"{session.demon.name} se marcha...")
+
+    else:
+        print("OPCION NO VALIDA.")
+
+
+def print_banner() -> None:
+    print("SMT-lite Demon Recruitment 1.0 beta")
+    print("Negocia con demonios usando alineamiento y rapport.")
+
+def read_difficulty() -> int:
+    """
+    Ask the user for a difficulty level (1..5). Clamp and return an int.
+    """
+    while True:
+        raw = input("Elige nivel de dificultad (1-5): ").strip()
+        if raw.isdigit():
+            lvl = int(raw)
+            return max(1, min(5, lvl))
+        print("Entrada inválida. Intenta con un número entre 1 y 5.")
+
+def choose_demon(demons: list[Demon]) -> Demon:
+    available = [d for d in demons if getattr(d, "available", True)]
+    if not available:
+        # Fallback: if all are taken, reuse the full list
+        available = demons[:]
+    return random.choice(available)
+
+
+def build_prototype_data():
+    # 1) Player: core at (0, 0), stance as a copy
+    core = Alignment(0, 0)
+    player = Player(core_alignment=core)
+    # (If your Player.__init__ already clones stance, you don't need to set it again.)
+
+    # 2) Demons (2 examples)
+    demons = [
+        Demon(name="Pixie", alignment=Alignment(1, 2), personality=Personality.PLAYFUL,
+              patience=5, tolerance=4, rapport_needed=2),
+        Demon(name="Onmoraki", alignment=Alignment(-2, -2), personality=Personality.MOODY,
+              patience=4, tolerance=3, rapport_needed=2),
+    ]
+
+    # 3) Questions (minimal pool; choices are simple dicts)
+    questions_pool = [
+        Question(
+            id="q_mercy_1",
+            text="Un enemigo derrotado suplica por su vida. ¿Qué haces?",
+            tags=["mercy", "order", "ruthless"],
+            choices={
+                "Mostrar piedad":        {"dLC": 0, "dLD": 1,  "dRapport": 1},
+                "Capturarlo y juzgarlo": {"dLC": 1, "dLD": 0,  "dRapport": 0},
+                "Acabar con él":         {"dLC": 0, "dLD": -1, "dRapport": -1},
+            },
+        ),
+        Question(
+            id="q_order_1",
+            text="Hay toque de queda en la ciudad. Tus amigos quieren salir.",
+            tags=["order", "freedom", "reckless"],
+            choices={
+                "Cumplirlo estrictamente": {"dLC": 1,  "dLD": 0,  "dRapport": 1},
+                "Hacer una excepción":     {"dLC": -1, "dLD": 0,  "dRapport": 0},
+                "Ignorarlo y festejar":    {"dLC": -1, "dLD": 0,  "dRapport": -1},
+            },
+        ),
+        Question(
+            id="q_humor_1",
+            text="Un guardia te pide la contraseña.",
+            tags=["humor", "trick", "order"],
+            choices={
+                "Broma ingeniosa":        {"dLC": -1, "dLD": 0,  "dRapport": 1},
+                "Seguir el protocolo":    {"dLC": 1,  "dLD": 0,  "dRapport": 0},
+                "Sobornar discretamente": {"dLC": 0,  "dLD": 0,  "dRapport": -1},
+            },
+        ),
+        Question(
+            id="q_honor_1",
+            text="Te retan a un duelo formal.",
+            tags=["honor", "trick", "freedom"],
+            choices={
+                "Aceptar el duelo":    {"dLC": 1,  "dLD": 1,  "dRapport": 1},
+                "Tender una trampa":   {"dLC": -1, "dLD": 0,  "dRapport": 0},
+                "Rehusar y retirarte": {"dLC": 0,  "dLD": 0,  "dRapport": -1},
+            },
+        ),
+    ]
+    return player, demons, questions_pool
+
+
+def run_game_loop(sesion: NegotiationSession, nivel_dificultad: int) -> None:
+    """
+    Core loop: show status, run menu, apply actions, check join/leave,
+    apply difficulty pressure, and advance rounds until the session ends.
+    """
+    # Optional: if you loaded ROUND_DELAY_SEC from config, use it; else fallback
+    try:
+        delay = ROUND_DELAY_SEC
+    except NameError:
+        delay = 0  # or 3 if you want a default pause
+
+    while sesion.in_progress:
+        print(f"\nEsta es la ronda número {sesion.round_no}.")
+        sesion.show_status()
+
+        opcion = show_menu(sesion)           # returns "1".."5" or "0" if ended
+        if opcion == "0":
+            break
+
+        dispatch_action(sesion, opcion)
+
+        # Per your spec, check both conditions after actions:
+        sesion.check_union()
+        sesion.check_fled()
+
+        # Optional pause
+        if delay > 0:
+            time.sleep(delay)
+
+        # Difficulty pressure
+        sesion.difficulty(nivel_dificultad)
+
+        # Advance round
+        sesion.round_no += 1
+
+def summarize_session(sesion: NegotiationSession) -> None:
+    """
+    Print a final summary: alignments, distance, outcome, rounds, and roster.
+    """
+    # Finalization according to flags
+    if sesion.recruited:
+        sesion.finish_union()
+    elif sesion.fled:
+        sesion.finish_fled()
+
+    # Summary data
+    core = sesion.player.core_alignment
+    stance = sesion.player.stance_alignment
+    dist = stance.manhattan_distance(sesion.demon.alignment)
+    roster_names = [d.name for d in sesion.player.roster]
+
+    print("\n===== Session Summary =====")
+    print(f"Player core LC/LD:   ({core.law_chaos}, {core.light_dark})")
+    print(f"Player stance LC/LD: ({stance.law_chaos}, {stance.light_dark})")
+    print(f"Demon: {sesion.demon.name} | Final distance: {dist}")
+    print(f"Outcome: {'Recruited' if sesion.recruited else 'Fled' if sesion.fled else 'Ended'}")
+    print(f"Rounds played: {sesion.round_no - 1}")
+    print(f"Roster: {', '.join(roster_names) if roster_names else '(empty)'}")
 
 def main():
-    load_config("config.json")   # 1) set limits/seed/UI first
-    demons = load_demons("data/demons.json")
-    questions = load_questions("data/questions.json")
+    print_banner()
+    
+    try:
+        load_config("config.json")  # sets RAPPORT_MIN/MAX, AXIS_MIN/MAX, TOL_MIN/MAX, RNG_SEED, etc.
+    except NameError:
+        # If load_config is not available yet, you can skip it during the first run.
+        pass
 
-    player = Player(core_alignment=Alignment(0, 0),
-                    stance_alignment=Alignment(0, 0))
-    demon = demons[0]
-    session = NegotiationSession(player, demon, questions)
-    run_loop(session)
+    player, demons, questions_pool = build_prototype_data()
+    nivel_dificultad = read_difficulty()
+    demon_actual = choose_demon(demons)
+    sesion = NegotiationSession(player=player, demon=demon_actual, question_pool=questions_pool)
+    run_game_loop(sesion, nivel_dificultad)
+    summarize_session(sesion)
 
 if __name__ == "__main__":
     main()
