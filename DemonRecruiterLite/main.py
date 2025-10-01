@@ -7,7 +7,7 @@ Description:
 
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import Dict, List, Tuple, Optional, TypedDict, Set
+from typing import Dict, List, Tuple, Optional, TypedDict, Set, Final, Any
 from enum import Enum
 import os
 import random
@@ -79,7 +79,7 @@ class Demon:
 
         PHASE A (prototype): only forward the rapport change defined by the option.
         Do NOT modify tolerance or any demon/session state here.
-
+        PHASE B (actual): base dRapport + personality tag-based bonus (from JSON). Tolerance unchanged.
         Parameters
         ----------
         effect : dict or object with attribute 'dRapport'
@@ -90,26 +90,32 @@ class Demon:
         Returns
         -------
         (delta_rapport, delta_tolerance) : tuple[int, int]
-            For this phase: (dRapport, 0).
         """
-        # 1) Read dRapport flexibly: dict first, then fallback to attribute.
+
+        # Base dRapport
+
         try:
-            d_rep = effect.get("dRapport", 0)
+            base = effect.get("dRapport", 0)
         except AttributeError:
-            d_rep = getattr(effect, "dRapport", 0)
-
-        # 2) Minimal validation.
-        if not isinstance(d_rep, (int, float)):
+            base = getattr(effect, "dRapport", 0)
+        if not isinstance(base, (int, float)):
             raise TypeError("dRapport must be numeric (int or float).")
+        base = int(base)
 
-        # 3) Normalize to int for consistent arithmetic/clamping elsewhere.
-        d_rep = int(d_rep)
+        # Tags (prefer effect-level; you can also merge question-level tags in ask())
+        tags = effect.get("tags", []) if isinstance(effect, dict) else getattr(effect, "tags", [])
+        if not isinstance(tags, list):
+            tags = [tags]
+        tags = [str(t).lower() for t in tags]
 
-        # 4) In this phase, tolerance does not change.
-        delta_tolerance = 0
+        # Lookup weights from the loaded registry
+        weights = PERSONALITY_TAG_WEIGHTS.get(self.personality, {})
+        bonus = 0
+        for t in tags:
+            bonus += int(weights.get(t, 0))
 
-        # 5) Return the deltas (session applies them and clamps globally).
-        return d_rep, delta_tolerance
+        delta_rapport = clamp(base + bonus, -2, 2)
+        return delta_rapport, 0
 
 
 @dataclass(slots=True, eq=False)
@@ -188,25 +194,42 @@ class NegotiationSession:
         self._used_question_ids.add(q.id)
         return q
 
-    def ask(self) -> Dict[str, int]:
+    def ask(self) -> Effect:
         """
-        Show a question and collect a valid choice.
-        Returns the chosen option's effect dict, e.g. {"dLC":0, "dLD":1, "dRapport":1}.
+        Show a question, collect a valid choice, and return the chosen option's effect.
+        Merges question-level tags into the effect so Demon.react() can consider both.
         """
         q = self.pick_question()
 
+        # 1) Print the question and enumerate options
         print(f"\nQ: {q.text}")
-        options = list(q.choices.items())  # [(label, effect_dict), ...]
+        options = list(q.choices.items())  # [(label, effect_dict), ...] (dict preserves insertion order)
         for idx, (label, _) in enumerate(options, start=1):
             print(f"  {idx}) {label}")
 
+        # 2) Get a valid option index
         while True:
-            raw = input("Choose an option number: ").strip()
+            raw = input("Choose an option number: ").strip()  # replace with safe_input(...) if you added it
             if raw.isdigit():
                 i = int(raw)
                 if 1 <= i <= len(options):
                     _, effect = options[i - 1]
-                    return effect
+
+                    # 3) Merge question-level tags into the effect (without mutating the pool)
+                    eff_copy = dict(effect)  # shallow copy is enough for our flat dict
+                    eff_tags = eff_copy.get("tags", [])
+                    if not isinstance(eff_tags, list):
+                        eff_tags = [eff_tags]
+
+                    # Normalize to lowercase and deduplicate while preserving order
+                    q_tags = q.tags if isinstance(q.tags, list) else [q.tags]
+                    merged = list(dict.fromkeys(
+                        [*(str(t).lower() for t in eff_tags), *(str(t).lower() for t in q_tags)]
+                    ))
+                    eff_copy["tags"] = merged
+
+                    return eff_copy
+
             print("Invalid choice. Try again.")
 
 
@@ -354,6 +377,8 @@ def _parse_personality(val: Any) -> Personality:
                     return p
     raise ValueError(f"Invalid personality value: {val!r}")
 
+def clamp(x: int, lo: int, hi: int) -> int:
+    return lo if x < lo else hi if x > hi else x
 
 # =========================
 # Loaders
@@ -372,7 +397,6 @@ def load_config(path: str = "config.json") -> None:
       - Sets ROUND_DELAY_SEC
       - Prints a short status message
     """
-    import json, random
 
     global RAPPORT_MIN, RAPPORT_MAX, AXIS_MIN, AXIS_MAX
     global TOL_MIN, TOL_MAX, RNG_SEED, ROUND_DELAY_SEC
@@ -531,6 +555,61 @@ def load_questions(path: str) -> List[Question]:
 
     return questions
 
+# Global registry (filled by load_personality_weights)
+PERSONALITY_TAG_WEIGHTS: dict[Personality, dict[str, int]] = {}
+
+def load_personality_weights(path: str = "data/personality_weights.json") -> None:
+    """
+    Load personality tag weights from JSON into PERSONALITY_TAG_WEIGHTS.
+    JSON schema:
+      { "PLAYFUL": {"humor": 2, "order": -1, ...}, "CUNNING": {...}, ... }
+
+    - Keys must be Personality names (case-insensitive).
+    - Inner keys are tag strings (we normalize to lowercase).
+    - Values are ints; clamped to [-2, 2].
+    If file is missing or empty, we fall back to neutral (no bonuses).
+    """
+    global PERSONALITY_TAG_WEIGHTS
+
+    if not os.path.exists(path):
+        print(f"[weights] {path} not found. Using neutral weights (no personality bonuses).")
+        PERSONALITY_TAG_WEIGHTS = {}
+        return
+
+    with open(path, "r", encoding="utf-8") as f:
+        raw = json.load(f)
+
+    if not isinstance(raw, dict):
+        raise ValueError("personality_weights.json must be a JSON object mapping personality -> tag map.")
+
+    weights: dict[Personality, dict[str, int]] = {}
+    for p_name, tagmap in raw.items():
+        if not isinstance(tagmap, dict):
+            raise ValueError(f"Invalid tag map for personality {p_name!r}: must be an object.")
+
+        # Map string to Personality enum (case-insensitive)
+        try:
+            p = Personality[p_name.strip().upper()]
+        except KeyError as e:
+            raise ValueError(f"Unknown personality name: {p_name!r}") from e
+
+        inner: dict[str, int] = {}
+        for tag, val in tagmap.items():
+            try:
+                v = int(val)
+            except (TypeError, ValueError):
+                raise ValueError(f"Weight for tag {tag!r} under {p_name!r} must be an integer.")
+            # Clamp to [-2, 2]
+            if v < -2: v = -2
+            if v >  2: v =  2
+            inner[str(tag).lower()] = v  # normalize tag key to lowercase
+
+        weights[p] = inner
+
+    PERSONALITY_TAG_WEIGHTS = weights
+    total = sum(len(m) for m in weights.values())
+    print(f"[weights] Loaded {total} tag weights across {len(weights)} personalities.")
+
 # =========================
 #  Console-level Functions
 # =========================
@@ -628,7 +707,7 @@ def choose_demon(demons: list[Demon]) -> Demon:
     return random.choice(available)
 
 
-def run_game_loop(session: NegotiationSession, nivel_dificultad: int) -> None:
+def run_game_loop(session: NegotiationSession, diff_level: int) -> None:
     """
     Core loop: show status, run menu, apply actions, check join/leave,
     apply difficulty pressure, and advance rounds until the session ends.
@@ -639,29 +718,40 @@ def run_game_loop(session: NegotiationSession, nivel_dificultad: int) -> None:
     except NameError:
         delay = 0  # or 3 if you want a default pause
 
-    while session.in_progress:
-        print(f"\nEsta es la ronda número {session.round_no}.")
-        session.show_status()
 
-        opcion = show_menu(session)           # returns "1".."5" or "0" if ended
-        if opcion == "0":
-            break
+    try:
 
-        dispatch_action(session, opcion)
+        while session.in_progress:
+            print(f"\nEsta es la ronda número {session.round_no}.")
+            session.show_status()
 
-        # Per your spec, check both conditions after actions:
-        session.check_union()
-        session.check_fled()
+            opcion = show_menu(session)           # returns "1".."5" or "0" if ended
+            if opcion == "0":
+                break
 
-        # Optional pause
-        if delay > 0:
-            time.sleep(delay)
+            dispatch_action(session, opcion)
 
-        # Difficulty pressure
-        session.difficulty(nivel_dificultad)
+            # Per your spec, check both conditions after actions:
+            session.check_union()
+            session.check_fled()
 
-        # Advance round
-        session.round_no += 1
+            # Optional pause
+            if delay > 0:
+                time.sleep(delay)
+
+            # Difficulty pressure
+            session.difficulty(diff_level)
+
+            # Advance round
+            session.round_no += 1
+    
+    except (KeyboardInterrumpt, E0FError):
+        # Smooth exit: stop the session and mark as fled
+        print("\n[!] Interrupted by user. Ending negotiation softly…")
+        session.in_progress = False
+        session.fled = True
+
+    
 
 def summarize_session(session: NegotiationSession) -> None:
     """
@@ -702,6 +792,7 @@ def main():
         pass
 
     rng = random.Random(RNG_SEED) if RNG_SEED is not None else None
+    load_personality_weights("data/personality_weights.json")
     player = Player(core_alignment=Alignment(0, 0))
     demons = load_demons("data/demons.json")
     questions_pool = load_questions("data/questions.json")

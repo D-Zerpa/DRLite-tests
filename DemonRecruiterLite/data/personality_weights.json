@@ -1,0 +1,56 @@
+{
+  "PLAYFUL": {
+    "humor": 2,
+    "trick": 1,
+    "kindness": 1,
+    "freedom": 1,
+    "order": -1,
+    "ruthless": -2,
+    "bureaucracy": -1,
+    "discipline": -1,
+    "obedience": -1
+  },
+  "CHILDISH": {
+    "kindness": 2,
+    "play": 2,
+    "humor": 1,
+    "light": 1,
+    "discipline": -2,
+    "corruption": -1,
+    "dark": -1,
+    "greed": -1,
+    "fear": -1
+  },
+  "MOODY": {
+    "dark": 2,
+    "taboo": 1,
+    "pride": 1,
+    "power": 1,
+    "mock": -1,
+    "honor": -1,
+    "virtue": -1,
+    "order": -1
+  },
+  "CUNNING": {
+    "trick": 2,
+    "cunning": 2,
+    "deal": 1,
+    "stealth": 1,
+    "pragmatism": 1,
+    "honor": -2,
+    "honesty": -1,
+    "virtue": -1,
+    "order": -1
+  },
+  "PROUD": {
+    "honor": 2,
+    "virtue": 2,
+    "order": 1,
+    "discipline": 1,
+    "strength": 1,
+    "trick": -2,
+    "mock": -1,
+    "chaos": -1,
+    "cunning": -1
+  }
+}
