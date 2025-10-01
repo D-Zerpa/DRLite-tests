@@ -8,5 +8,186 @@
       "Capturarlo y juzgarlo":  {"dLC": 1, "dLD": 0,  "dRapport": 0,  "tags": ["order","justice"]},
       "Acabar con él":          {"dLC": 0, "dLD": -1, "dRapport": -1, "tags": ["ruthless","dark"]}
     }
+  },
+
+  {
+    "id": "q_mercy_2",
+    "text": "Encuentras a un ladrón hambriento robando pan. ¿Qué haces?",
+    "tags": ["mercy","justice","poverty"],
+    "choices": {
+      "Compartir tu comida":      { "dLC": 0,  "dLD": 1,  "dRapport": 1,  "tags": ["mercy","kindness"] },
+      "Denunciarlo a la guardia": { "dLC": 1,  "dLD": 0,  "dRapport": 0,  "tags": ["order","justice"] },
+      "Ignorarlo y seguir":       { "dLC": 0,  "dLD": 0,  "dRapport": -1, "tags": ["apathy"] }
+    }
+  },
+  {
+    "id": "q_freedom_1",
+    "text": "Una autoridad prohíbe cantar en la plaza. Tus amigos quieren hacerlo igual.",
+    "tags": ["freedom","order","rebellion"],
+    "choices": {
+      "Cantar con ellos":         { "dLC": -1, "dLD": 0,  "dRapport": 1,  "tags": ["freedom","reckless"] },
+      "Convencerlos de acatar":   { "dLC": 1,  "dLD": 0,  "dRapport": 0,  "tags": ["order","prudence"] },
+      "Buscar permiso legal":     { "dLC": 1,  "dLD": 0,  "dRapport": -1, "tags": ["order","bureaucracy"] }
+    }
+  },
+  {
+    "id": "q_profit_1",
+    "text": "Te ofrecen un trato muy lucrativo con cláusulas moralmente grises.",
+    "tags": ["profit","pragmatism","ethics"],
+    "choices": {
+      "Aceptar tal cual":         { "dLC": -1, "dLD": -1, "dRapport": 0,  "tags": ["profit","greed"] },
+      "Negociar mejores términos":{ "dLC": 0,  "dLD": 0,  "dRapport": 1,  "tags": ["pragmatism","cunning"] },
+      "Rechazar por principios":  { "dLC": 1,  "dLD": 1,  "dRapport": 0,  "tags": ["honor","virtue"] }
+    }
+  },
+  {
+    "id": "q_loyalty_1",
+    "text": "Un aliado cometió un error grave. ¿Cómo procedes?",
+    "tags": ["loyalty","discipline","mercy"],
+    "choices": {
+      "Cubrirlo esta vez":        { "dLC": 0,  "dLD": 1,  "dRapport": 1,  "tags": ["loyalty","mercy"] },
+      "Sanción justa":            { "dLC": 1,  "dLD": 0,  "dRapport": 0,  "tags": ["order","justice"] },
+      "Expulsarlo del grupo":     { "dLC": 0,  "dLD": -1, "dRapport": -1, "tags": ["ruthless","discipline"] }
+    }
+  },
+  {
+    "id": "q_curiosity_1",
+    "text": "Ves una puerta con símbolos prohibidos. ¿La abres?",
+    "tags": ["curiosity","taboo","risk"],
+    "choices": {
+      "Abrirla sin dudar":       { "dLC": -1, "dLD": 0,  "dRapport": 1,  "tags": ["curiosity","reckless"] },
+      "Investigar primero":      { "dLC": 0,  "dLD": 0,  "dRapport": 0,  "tags": ["prudence","logic"] },
+      "Dejarla cerrada":         { "dLC": 1,  "dLD": 0,  "dRapport": -1, "tags": ["order","fear"] }
+    }
+  },
+  {
+    "id": "q_strength_1",
+    "text": "Un rival te provoca frente a la multitud.",
+    "tags": ["honor","strength","pride"],
+    "choices": {
+      "Aceptar el reto":         { "dLC": 1,  "dLD": 1,  "dRapport": 1,  "tags": ["honor","strength"] },
+      "Ignorarlo con calma":     { "dLC": 0,  "dLD": 0,  "dRapport": 0,  "tags": ["prudence","patience"] },
+      "Responder con burla":     { "dLC": -1, "dLD": 0,  "dRapport": -1, "tags": ["trick","mock"] }
+    }
+  },
+  {
+    "id": "q_trick_2",
+    "text": "Necesitas entrar a un archivo restringido.",
+    "tags": ["trick","order","cunning"],
+    "choices": {
+      "Colarte disfrazado":      { "dLC": -1, "dLD": 0,  "dRapport": 1,  "tags": ["trick","stealth"] },
+      "Pedir permiso formal":    { "dLC": 1,  "dLD": 0,  "dRapport": 0,  "tags": ["order","protocol"] },
+      "Sobornar al guardia":     { "dLC": 0,  "dLD": -1, "dRapport": -1, "tags": ["greed","corruption"] }
+    }
+  },
+  {
+    "id": "q_kindness_1",
+    "text": "Un niño perdido te pide ayuda para volver a casa.",
+    "tags": ["kindness","mercy","light"],
+    "choices": {
+      "Acompañarlo de inmediato":{ "dLC": 0,  "dLD": 1,  "dRapport": 1,  "tags": ["kindness","mercy"] },
+      "Pedir a otros que lo lleven": { "dLC": 0, "dLD": 0, "dRapport": 0, "tags": ["delegation"] },
+      "Decir que no puedes":     { "dLC": 0,  "dLD": -1, "dRapport": -1, "tags": ["apathy"] }
+    }
+  },
+  {
+    "id": "q_pragmatism_1",
+    "text": "Tu equipo está cansado, pero un botín valioso está cerca.",
+    "tags": ["pragmatism","risk","discipline"],
+    "choices": {
+      "Seguir ahora mismo":      { "dLC": -1, "dLD": 0,  "dRapport": 0,  "tags": ["risk","greed"] },
+      "Descansar y volver":      { "dLC": 1,  "dLD": 0,  "dRapport": 1,  "tags": ["order","prudence"] },
+      "Enviar a un explorador":  { "dLC": 0,  "dLD": 0,  "dRapport": 0,  "tags": ["cunning","scout"] }
+    }
+  },
+  {
+    "id": "q_chaos_1",
+    "text": "Un grupo planea sabotear una ley injusta.",
+    "tags": ["chaos","justice","freedom"],
+    "choices": {
+      "Unirte al sabotaje":      { "dLC": -1, "dLD": 0,  "dRapport": 1,  "tags": ["chaos","freedom"] },
+      "Proponer reforma legal":  { "dLC": 1,  "dLD": 0,  "dRapport": 0,  "tags": ["order","justice"] },
+      "No involucrarte":         { "dLC": 0,  "dLD": 0,  "dRapport": -1, "tags": ["apathy"] }
+    }
+  },
+  {
+    "id": "q_order_2",
+    "text": "Tu superior te da una orden que consideras inútil.",
+    "tags": ["order","obedience","reason"],
+    "choices": {
+      "Cumplir sin preguntas":   { "dLC": 1,  "dLD": 0,  "dRapport": 0,  "tags": ["order","obedience"] },
+      "Preguntar el porqué":     { "dLC": 0,  "dLD": 0,  "dRapport": 1,  "tags": ["reason","dialogue"] },
+      "Ignorar la orden":        { "dLC": -1, "dLD": 0,  "dRapport": -1, "tags": ["chaos","defiance"] }
+    }
+  },
+  {
+    "id": "q_dark_1",
+    "text": "Un ritual oscuro promete poder a cambio de un pequeño sacrificio.",
+    "tags": ["dark","power","taboo"],
+    "choices": {
+      "Realizar el ritual":      { "dLC": 0,  "dLD": -1, "dRapport": 0,  "tags": ["dark","power"] },
+      "Investigar riesgos":      { "dLC": 0,  "dLD": 0,  "dRapport": 1,  "tags": ["prudence","curiosity"] },
+      "Rechazarlo por completo": { "dLC": 0,  "dLD": 1,  "dRapport": -1, "tags": ["light","virtue"] }
+    }
+  },
+  {
+    "id": "q_light_1",
+    "text": "Te piden donar parte de tu botín a un santuario local.",
+    "tags": ["light","charity","virtue"],
+    "choices": {
+      "Donar generosamente":     { "dLC": 0,  "dLD": 1,  "dRapport": 1,  "tags": ["charity","virtue"] },
+      "Dar una pequeña ofrenda": { "dLC": 0,  "dLD": 0,  "dRapport": 0,  "tags": ["moderation"] },
+      "Negarte a donar":         { "dLC": 0,  "dLD": -1, "dRapport": -1, "tags": ["greed"] }
+    }
+  },
+  {
+    "id": "q_cunning_1",
+    "text": "Dos facciones rivales quieren tu apoyo.",
+    "tags": ["cunning","deal","diplomacy"],
+    "choices": {
+      "Jugar a ambos bandos":    { "dLC": -1, "dLD": 0,  "dRapport": 1,  "tags": ["cunning","deal"] },
+      "Mediar con honestidad":   { "dLC": 1,  "dLD": 0,  "dRapport": 0,  "tags": ["order","honesty"] },
+      "No tomar partido":        { "dLC": 0,  "dLD": 0,  "dRapport": -1, "tags": ["neutral","avoid"] }
+    }
+  },
+  {
+    "id": "q_honesty_1",
+    "text": "Te preguntan si rompiste una regla menor.",
+    "tags": ["honesty","rule","consequence"],
+    "choices": {
+      "Decir la verdad":         { "dLC": 1,  "dLD": 1,  "dRapport": 1,  "tags": ["honor","honesty"] },
+      "Mentir para zafar":       { "dLC": -1, "dLD": 0,  "dRapport": -1, "tags": ["trick","selfish"] },
+      "Evitar responder":        { "dLC": 0,  "dLD": 0,  "dRapport": 0,  "tags": ["cautious"] }
+    }
+  },
+  {
+    "id": "q_patience_1",
+    "text": "Tu compañero está inquieto y quiere terminar la misión rápido.",
+    "tags": ["patience","discipline","risk"],
+    "choices": {
+      "Apurar a todos":          { "dLC": -1, "dLD": 0,  "dRapport": -1, "tags": ["reckless"] },
+      "Pedir calma y método":    { "dLC": 1,  "dLD": 0,  "dRapport": 1,  "tags": ["order","discipline"] },
+      "Tomar una pequeña pausa": { "dLC": 0,  "dLD": 0,  "dRapport": 0,  "tags": ["rest"] }
+    }
+  },
+  {
+    "id": "q_deal_1",
+    "text": "Un demonio menor te propone un intercambio de favores.",
+    "tags": ["deal","profit","trust"],
+    "choices": {
+      "Aceptar con garantías":   { "dLC": 0,  "dLD": 0,  "dRapport": 1,  "tags": ["deal","caution"] },
+      "Aceptar a ciegas":        { "dLC": -1, "dLD": 0,  "dRapport": 0,  "tags": ["risk","trust"] },
+      "Rechazar la oferta":      { "dLC": 1,  "dLD": 0,  "dRapport": -1, "tags": ["prudence"] }
+    }
+  },
+  {
+    "id": "q_justice_1",
+    "text": "Descubres que un noble abusa de su poder.",
+    "tags": ["justice","order","rebellion"],
+    "choices": {
+      "Exponerlo públicamente":  { "dLC": -1, "dLD": 1,  "dRapport": 1,  "tags": ["justice","rebellion"] },
+      "Denunciar por vías legales": { "dLC": 1, "dLD": 0, "dRapport": 0, "tags": ["order","law"] },
+      "Aceptar un soborno":      { "dLC": 0,  "dLD": -1, "dRapport": -1, "tags": ["greed","corruption"] }
+    }
   }
 ]

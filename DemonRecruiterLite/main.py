@@ -9,8 +9,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Dict, List, Tuple, Optional, TypedDict, Set
 from enum import Enum
+import os
 import random
 import time
+import json
 
 # ====== Defaults (used if config.json is missing or incomplete) ======
 RAPPORT_MIN, RAPPORT_MAX = -3, 3
@@ -18,69 +20,6 @@ AXIS_MIN, AXIS_MAX       = -5, 5
 TOL_MIN, TOL_MAX         = 1, 5
 RNG_SEED                 = None
 ROUND_DELAY_SEC          = 0
-
-def load_config(path: str = "config.json") -> None:
-    """
-    Read config.json and update global limits/seed/UI settings.
-    If the file is missing, continue with defaults.
-
-    Validates that min < max for each range.
-
-    Side effects:
-      - Sets global RAPPORT_MIN/MAX, AXIS_MIN/MAX, TOL_MIN/MAX
-      - Sets RNG_SEED and seeds the RNG if not None
-      - Sets ROUND_DELAY_SEC
-      - Prints a short status message
-    """
-    import json, random
-
-    global RAPPORT_MIN, RAPPORT_MAX, AXIS_MIN, AXIS_MAX
-    global TOL_MIN, TOL_MAX, RNG_SEED, ROUND_DELAY_SEC
-
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            cfg = json.load(f)
-    except FileNotFoundError:
-        print(f"[config] {path} not found. Using defaults.")
-        return
-
-    def nested_get(d, keys, default=None):
-        cur = d
-        for k in keys:
-            if not isinstance(cur, dict) or k not in cur:
-                return default
-            cur = cur[k]
-        return cur
-
-    rmin = nested_get(cfg, ["rapport", "min"], RAPPORT_MIN)
-    rmax = nested_get(cfg, ["rapport", "max"], RAPPORT_MAX)
-    amin = nested_get(cfg, ["alignment", "min"], AXIS_MIN)
-    amax = nested_get(cfg, ["alignment", "max"], AXIS_MAX)
-    tmin = nested_get(cfg, ["tolerance", "min"], TOL_MIN)
-    tmax = nested_get(cfg, ["tolerance", "max"], TOL_MAX)
-    seed = cfg.get("rng_seed", RNG_SEED)
-    delay = nested_get(cfg, ["ui", "round_delay_seconds"], ROUND_DELAY_SEC)
-
-    # Minimal validation
-    if rmin >= rmax: raise ValueError("rapport.min must be < rapport.max")
-    if amin >= amax: raise ValueError("alignment.min must be < alignment.max")
-    if tmin >= tmax: raise ValueError("tolerance.min must be < tolerance.max")
-
-    RAPPORT_MIN, RAPPORT_MAX = int(rmin), int(rmax)
-    AXIS_MIN, AXIS_MAX       = int(amin), int(amax)
-    TOL_MIN, TOL_MAX         = int(tmin), int(tmax)
-    ROUND_DELAY_SEC          = int(delay) if delay is not None else 0
-    RNG_SEED                 = int(seed) if seed is not None else None
-
-    if RNG_SEED is not None:
-        random.seed(RNG_SEED)
-        print(f"[config] RNG seeded with {RNG_SEED}")
-
-    print(
-        f"[config] Loaded. Rapport {RAPPORT_MIN}..{RAPPORT_MAX}, "
-        f"Alignment {AXIS_MIN}..{AXIS_MAX}, Tolerance {TOL_MIN}..{TOL_MAX}, "
-        f"Delay {ROUND_DELAY_SEC}s."
-    )
     
 # =========================
 # OOP Models
@@ -245,7 +184,7 @@ class NegotiationSession:
             candidates = self.question_pool[:]     # reset
             self._used_question_ids.clear()
 
-        q = random.choice(candidates)
+        q = self.rng.choice(candidates)
         self._used_question_ids.add(q.id)
         return q
 
@@ -256,13 +195,11 @@ class NegotiationSession:
         """
         q = self.pick_question()
 
-        # 1) Print question and numbered options
         print(f"\nQ: {q.text}")
-        options = list(q.choices.items())  # [(label, effect_dict), ...]  (dict preserves insertion order)
+        options = list(q.choices.items())  # [(label, effect_dict), ...]
         for idx, (label, _) in enumerate(options, start=1):
             print(f"  {idx}) {label}")
 
-        # 2) Read a valid index
         while True:
             raw = input("Choose an option number: ").strip()
             if raw.isdigit():
@@ -331,12 +268,12 @@ class NegotiationSession:
         Then clamp stance and keep state consistent.
         """
         # 1) Rapport pressure
-        drop = random.randint(0, max(0, nivel // 2))
+        drop = self.rng.randint(0, max(0, level // 2))
         self.rapport = max(RAPPORT_MIN, self.rapport - drop)
 
         # 2) Optional nudge away from the demon (probability nivel/10)
-        if random.random() < (nivel / 10.0):
-            axis = random.choice(("law_chaos", "light_dark"))
+        if self.rng.random() < (level / 10.0):
+            axis = self.rng.choice(("law_chaos", "light_dark"))
             s = getattr(self.player.stance_alignment, axis)
             d = getattr(self.demon.alignment, axis)
             # Move 1 step away from the demon along the chosen axis
@@ -383,6 +320,220 @@ class NegotiationSession:
             """If fled, notify."""
             if self.fled:
                 print(f"The negotiation with {self.demon.name} ended. The demon walked away.")
+
+
+# =========================
+# Helpers
+# =========================
+
+def _coerce_int(value: Any, default: int = 0) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+def _ensure_list_of_str(value: Any) -> List[str]:
+    if isinstance(value, list):
+        return [str(x) for x in value]
+    if value is None:
+        return []
+    # single string or other → put into a one-element list
+    return [str(value)]
+
+def _parse_personality(val: Any) -> Personality:
+    if isinstance(val, Personality):
+        return val
+    if isinstance(val, str):
+        key = val.strip().upper()
+        try:
+            return Personality[key]
+        except KeyError:
+            # Accept values already like "PLAYFUL" or with proper casing
+            for p in Personality:
+                if p.value.upper() == key:
+                    return p
+    raise ValueError(f"Invalid personality value: {val!r}")
+
+
+# =========================
+# Loaders
+# =========================
+
+def load_config(path: str = "config.json") -> None:
+    """
+    Read config.json and update global limits/seed/UI settings.
+    If the file is missing, continue with defaults.
+
+    Validates that min < max for each range.
+
+    Side effects:
+      - Sets global RAPPORT_MIN/MAX, AXIS_MIN/MAX, TOL_MIN/MAX
+      - Sets RNG_SEED and seeds the RNG if not None
+      - Sets ROUND_DELAY_SEC
+      - Prints a short status message
+    """
+    import json, random
+
+    global RAPPORT_MIN, RAPPORT_MAX, AXIS_MIN, AXIS_MAX
+    global TOL_MIN, TOL_MAX, RNG_SEED, ROUND_DELAY_SEC
+
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            cfg = json.load(f)
+    except FileNotFoundError:
+        print(f"[config] {path} not found. Using defaults.")
+        return
+
+    def nested_get(d, keys, default=None):
+        cur = d
+        for k in keys:
+            if not isinstance(cur, dict) or k not in cur:
+                return default
+            cur = cur[k]
+        return cur
+
+    rmin = nested_get(cfg, ["rapport", "min"], RAPPORT_MIN)
+    rmax = nested_get(cfg, ["rapport", "max"], RAPPORT_MAX)
+    amin = nested_get(cfg, ["alignment", "min"], AXIS_MIN)
+    amax = nested_get(cfg, ["alignment", "max"], AXIS_MAX)
+    tmin = nested_get(cfg, ["tolerance", "min"], TOL_MIN)
+    tmax = nested_get(cfg, ["tolerance", "max"], TOL_MAX)
+    seed = cfg.get("rng_seed", RNG_SEED)
+    delay = nested_get(cfg, ["ui", "round_delay_seconds"], ROUND_DELAY_SEC)
+
+    # Minimal validation
+    if rmin >= rmax: raise ValueError("rapport.min must be < rapport.max")
+    if amin >= amax: raise ValueError("alignment.min must be < alignment.max")
+    if tmin >= tmax: raise ValueError("tolerance.min must be < tolerance.max")
+
+    RAPPORT_MIN, RAPPORT_MAX = int(rmin), int(rmax)
+    AXIS_MIN, AXIS_MAX       = int(amin), int(amax)
+    TOL_MIN, TOL_MAX         = int(tmin), int(tmax)
+    ROUND_DELAY_SEC          = int(delay) if delay is not None else 0
+    RNG_SEED                 = int(seed) if seed is not None else None
+
+    if RNG_SEED is not None:
+        random.seed(RNG_SEED)
+        print(f"[config] RNG seeded with {RNG_SEED}")
+
+    print(
+        f"[config] Loaded. Rapport {RAPPORT_MIN}..{RAPPORT_MAX}, "
+        f"Alignment {AXIS_MIN}..{AXIS_MAX}, Tolerance {TOL_MIN}..{TOL_MAX}, "
+        f"Delay {ROUND_DELAY_SEC}s."
+    )
+
+def load_demons(path: str) -> List[Demon]:
+    """
+    Load demons from JSON:
+    [
+      {
+        "name": "Pixie",
+        "alignment": {"law_chaos": 1, "light_dark": 2},
+        "personality": "PLAYFUL",
+        "patience": 5, "tolerance": 4, "rapport_needed": 2
+      }, ...
+    ]
+    """
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"Demons file not found: {path}")
+
+    with open(path, "r", encoding="utf-8") as f:
+        raw = json.load(f)
+
+    demons: List[Demon] = []
+    if not isinstance(raw, list):
+        raise ValueError("demons.json must contain a list of demons.")
+
+    for i, item in enumerate(raw, start=1):
+        try:
+            name = str(item["name"])
+            al = item.get("alignment", {})
+            lc = _coerce_int(al.get("law_chaos", 0))
+            ld = _coerce_int(al.get("light_dark", 0))
+            align = Alignment(law_chaos=lc, light_dark=ld)
+
+            personality = _parse_personality(item.get("personality", "PLAYFUL"))
+            patience = _coerce_int(item.get("patience", 4), 4)
+            tolerance = _coerce_int(item.get("tolerance", 3), 3)
+            rapport_needed = _coerce_int(item.get("rapport_needed", 2), 2)
+
+            demons.append(
+                Demon(
+                    name=name,
+                    alignment=align,
+                    personality=personality,
+                    patience=patience,
+                    tolerance=tolerance,
+                    rapport_needed=rapport_needed,
+                )
+            )
+        except Exception as e:
+            raise ValueError(f"Invalid demon at index {i}: {e}") from e
+
+    return demons
+
+def load_questions(path: str) -> List[Question]:
+    """
+    Load questions from JSON:
+    [
+      {
+        "id": "...",
+        "text": "...",
+        "tags": ["..."],
+        "choices": {
+           "Option label": {"dLC":0,"dLD":1,"dRapport":1,"tags":["..."]},
+           ...
+        }
+      }, ...
+    ]
+    """
+    # Allow singular/plural fallback if you wish
+    if not os.path.exists(path):
+        alt = path.replace("question.json", "questions.json")
+        if os.path.exists(alt):
+            path = alt
+        else:
+            raise FileNotFoundError(f"Questions file not found: {path}")
+
+    with open(path, "r", encoding="utf-8") as f:
+        raw = json.load(f)
+
+    if not isinstance(raw, list):
+        raise ValueError("questions.json must contain a list of questions.")
+
+    questions: List[Question] = []
+    for i, q in enumerate(raw, start=1):
+        try:
+            qid = str(q["id"])
+            text = str(q["text"])
+            tags = _ensure_list_of_str(q.get("tags", []))
+
+            choices_raw = q.get("choices", {})
+            if not isinstance(choices_raw, dict) or not choices_raw:
+                raise ValueError("choices must be a non-empty object.")
+
+            # Normalize effects
+            norm_choices: Dict[str, Effect] = {}
+            for label, eff in choices_raw.items():
+                if not isinstance(eff, dict):
+                    raise ValueError(f"choice '{label}' must be an object with dLC/dLD/dRapport.")
+                norm_choices[str(label)] = Effect(
+                    dLC=_coerce_int(eff.get("dLC", 0)),
+                    dLD=_coerce_int(eff.get("dLD", 0)),
+                    dRapport=_coerce_int(eff.get("dRapport", 0)),
+                    tags=_ensure_list_of_str(eff.get("tags", [])),
+                )
+
+            questions.append(Question(id=qid, text=text, tags=tags, choices=norm_choices))
+
+        except Exception as e:
+            raise ValueError(f"Invalid question at index {i}: {e}") from e
+
+    return questions
+
+# =========================
+#  Console-level Functions
+# =========================
 
 def show_menu(session) -> str:
     """
@@ -431,23 +582,10 @@ def dispatch_action(session, option: str) -> None:
 
         if guess == secret:
             print("¡Correcto!")
-            # Clamp rapport using your global limits
-            try:
-                # Prefer globals if already present in this module
-                new_val = session.rapport + 2
-                session.rapport = min(RAPPORT_MAX, new_val)
-            except NameError:
-                # Fallback: no globals visible; be explicit or import from your settings module
-                # Example fallback clamps to [-3, 3]
-                session.rapport = min(3, session.rapport + 2)
+            session.rapport = min(RAPPORT_MAX, session.rapport + 2)
         else:
             print("Incorrecto.")
-            try:
-                new_val = session.rapport - 1
-                session.rapport = max(RAPPORT_MIN, new_val)
-            except NameError:
-                # Fallback: clamp to [-3, 3] if constants not in scope
-                session.rapport = max(-3, session.rapport - 1)
+            session.rapport = max(RAPPORT_MIN, session.rapport - 1)
 
     elif option == "3":
         # Show current session HUD
@@ -490,67 +628,7 @@ def choose_demon(demons: list[Demon]) -> Demon:
     return random.choice(available)
 
 
-def build_prototype_data():
-    # 1) Player: core at (0, 0), stance as a copy
-    core = Alignment(0, 0)
-    player = Player(core_alignment=core)
-    # (If your Player.__init__ already clones stance, you don't need to set it again.)
-
-    # 2) Demons (2 examples)
-    demons = [
-        Demon(name="Pixie", alignment=Alignment(1, 2), personality=Personality.PLAYFUL,
-              patience=5, tolerance=4, rapport_needed=2),
-        Demon(name="Onmoraki", alignment=Alignment(-2, -2), personality=Personality.MOODY,
-              patience=4, tolerance=3, rapport_needed=2),
-    ]
-
-    # 3) Questions (minimal pool; choices are simple dicts)
-    questions_pool = [
-        Question(
-            id="q_mercy_1",
-            text="Un enemigo derrotado suplica por su vida. ¿Qué haces?",
-            tags=["mercy", "order", "ruthless"],
-            choices={
-                "Mostrar piedad":        {"dLC": 0, "dLD": 1,  "dRapport": 1},
-                "Capturarlo y juzgarlo": {"dLC": 1, "dLD": 0,  "dRapport": 0},
-                "Acabar con él":         {"dLC": 0, "dLD": -1, "dRapport": -1},
-            },
-        ),
-        Question(
-            id="q_order_1",
-            text="Hay toque de queda en la ciudad. Tus amigos quieren salir.",
-            tags=["order", "freedom", "reckless"],
-            choices={
-                "Cumplirlo estrictamente": {"dLC": 1,  "dLD": 0,  "dRapport": 1},
-                "Hacer una excepción":     {"dLC": -1, "dLD": 0,  "dRapport": 0},
-                "Ignorarlo y festejar":    {"dLC": -1, "dLD": 0,  "dRapport": -1},
-            },
-        ),
-        Question(
-            id="q_humor_1",
-            text="Un guardia te pide la contraseña.",
-            tags=["humor", "trick", "order"],
-            choices={
-                "Broma ingeniosa":        {"dLC": -1, "dLD": 0,  "dRapport": 1},
-                "Seguir el protocolo":    {"dLC": 1,  "dLD": 0,  "dRapport": 0},
-                "Sobornar discretamente": {"dLC": 0,  "dLD": 0,  "dRapport": -1},
-            },
-        ),
-        Question(
-            id="q_honor_1",
-            text="Te retan a un duelo formal.",
-            tags=["honor", "trick", "freedom"],
-            choices={
-                "Aceptar el duelo":    {"dLC": 1,  "dLD": 1,  "dRapport": 1},
-                "Tender una trampa":   {"dLC": -1, "dLD": 0,  "dRapport": 0},
-                "Rehusar y retirarte": {"dLC": 0,  "dLD": 0,  "dRapport": -1},
-            },
-        ),
-    ]
-    return player, demons, questions_pool
-
-
-def run_game_loop(sesion: NegotiationSession, nivel_dificultad: int) -> None:
+def run_game_loop(session: NegotiationSession, nivel_dificultad: int) -> None:
     """
     Core loop: show status, run menu, apply actions, check join/leave,
     apply difficulty pressure, and advance rounds until the session ends.
@@ -561,53 +639,58 @@ def run_game_loop(sesion: NegotiationSession, nivel_dificultad: int) -> None:
     except NameError:
         delay = 0  # or 3 if you want a default pause
 
-    while sesion.in_progress:
-        print(f"\nEsta es la ronda número {sesion.round_no}.")
-        sesion.show_status()
+    while session.in_progress:
+        print(f"\nEsta es la ronda número {session.round_no}.")
+        session.show_status()
 
-        opcion = show_menu(sesion)           # returns "1".."5" or "0" if ended
+        opcion = show_menu(session)           # returns "1".."5" or "0" if ended
         if opcion == "0":
             break
 
-        dispatch_action(sesion, opcion)
+        dispatch_action(session, opcion)
 
         # Per your spec, check both conditions after actions:
-        sesion.check_union()
-        sesion.check_fled()
+        session.check_union()
+        session.check_fled()
 
         # Optional pause
         if delay > 0:
             time.sleep(delay)
 
         # Difficulty pressure
-        sesion.difficulty(nivel_dificultad)
+        session.difficulty(nivel_dificultad)
 
         # Advance round
-        sesion.round_no += 1
+        session.round_no += 1
 
-def summarize_session(sesion: NegotiationSession) -> None:
+def summarize_session(session: NegotiationSession) -> None:
     """
     Print a final summary: alignments, distance, outcome, rounds, and roster.
     """
     # Finalization according to flags
-    if sesion.recruited:
-        sesion.finish_union()
-    elif sesion.fled:
-        sesion.finish_fled()
+    if session.recruited:
+        session.finish_union()
+    elif session.fled:
+        session.finish_fled()
 
     # Summary data
-    core = sesion.player.core_alignment
-    stance = sesion.player.stance_alignment
-    dist = stance.manhattan_distance(sesion.demon.alignment)
-    roster_names = [d.name for d in sesion.player.roster]
+    core = session.player.core_alignment
+    stance = session.player.stance_alignment
+    dist = stance.manhattan_distance(session.demon.alignment)
+    roster_names = [d.name for d in session.player.roster]
 
     print("\n===== Session Summary =====")
     print(f"Player core LC/LD:   ({core.law_chaos}, {core.light_dark})")
     print(f"Player stance LC/LD: ({stance.law_chaos}, {stance.light_dark})")
-    print(f"Demon: {sesion.demon.name} | Final distance: {dist}")
-    print(f"Outcome: {'Recruited' if sesion.recruited else 'Fled' if sesion.fled else 'Ended'}")
-    print(f"Rounds played: {sesion.round_no - 1}")
+    print(f"Demon: {session.demon.name} | Final distance: {dist}")
+    print(f"Outcome: {'Recruited' if session.recruited else 'Fled' if session.fled else 'Ended'}")
+    print(f"Rounds played: {session.round_no - 1}")
     print(f"Roster: {', '.join(roster_names) if roster_names else '(empty)'}")
+
+# =========================
+#  Main function
+# =========================
+
 
 def main():
     print_banner()
@@ -618,18 +701,13 @@ def main():
         # If load_config is not available yet, you can skip it during the first run.
         pass
 
-    try:
-        opcion = show_menu(sesion)
-    except (KeyboardInterrupt, EOFError):
-        print("\nSaliendo…")
-        sesion.in_progress = False
-        sesion.fled = True
-        return
-
-    player, demons, questions_pool = build_prototype_data()
+    rng = random.Random(RNG_SEED) if RNG_SEED is not None else None
+    player = Player(core_alignment=Alignment(0, 0))
+    demons = load_demons("data/demons.json")
+    questions_pool = load_questions("data/questions.json")
     diff_level = read_difficulty()
     current_demon = choose_demon(demons)
-    session = NegotiationSession(player=player, demon=current_demon, question_pool=questions_pool)
+    session = NegotiationSession(player=player, demon=current_demon, question_pool=questions_pool, rng=rng)
     run_game_loop(session, diff_level)
     summarize_session(session)
 

@@ -14,5 +14,102 @@
     "patience": 4,
     "tolerance": 3,
     "rapport_needed": 2
+  },
+
+    {
+    "name": "Jack Frost",
+    "alignment": { "law_chaos": -1, "light_dark": 1 },
+    "personality": "PLAYFUL",
+    "patience": 5,
+    "tolerance": 3,
+    "rapport_needed": 2
+  },
+  {
+    "name": "Lilim",
+    "alignment": { "law_chaos": -2, "light_dark": -1 },
+    "personality": "CUNNING",
+    "patience": 4,
+    "tolerance": 3,
+    "rapport_needed": 3
+  },
+  {
+    "name": "Angel",
+    "alignment": { "law_chaos": 2, "light_dark": 2 },
+    "personality": "PROUD",
+    "patience": 4,
+    "tolerance": 3,
+    "rapport_needed": 2
+  },
+  {
+    "name": "Oni",
+    "alignment": { "law_chaos": -1, "light_dark": 0 },
+    "personality": "PROUD",
+    "patience": 3,
+    "tolerance": 2,
+    "rapport_needed": 2
+  },
+  {
+    "name": "Kodama",
+    "alignment": { "law_chaos": 0, "light_dark": 1 },
+    "personality": "CHILDISH",
+    "patience": 5,
+    "tolerance": 4,
+    "rapport_needed": 2
+  },
+  {
+    "name": "Nekomata",
+    "alignment": { "law_chaos": -1, "light_dark": -1 },
+    "personality": "CUNNING",
+    "patience": 4,
+    "tolerance": 3,
+    "rapport_needed": 2
+  },
+  {
+    "name": "Lamia",
+    "alignment": { "law_chaos": -2, "light_dark": -2 },
+    "personality": "MOODY",
+    "patience": 5,
+    "tolerance": 2,
+    "rapport_needed": 3
+  },
+  {
+    "name": "Principality",
+    "alignment": { "law_chaos": 3, "light_dark": 2 },
+    "personality": "PROUD",
+    "patience": 5,
+    "tolerance": 3,
+    "rapport_needed": 3
+  },
+  {
+    "name": "Slime",
+    "alignment": { "law_chaos": 0, "light_dark": -1 },
+    "personality": "CHILDISH",
+    "patience": 3,
+    "tolerance": 4,
+    "rapport_needed": 1
+  },
+  {
+    "name": "Jack-o'-Lantern",
+    "alignment": { "law_chaos": -1, "light_dark": 0 },
+    "personality": "PLAYFUL",
+    "patience": 4,
+    "tolerance": 3,
+    "rapport_needed": 2
+  },
+  {
+    "name": "Dullahan",
+    "alignment": { "law_chaos": 0, "light_dark": -2 },
+    "personality": "MOODY",
+    "patience": 4,
+    "tolerance": 2,
+    "rapport_needed": 3
+  },
+  {
+    "name": "Kitsune",
+    "alignment": { "law_chaos": -1, "light_dark": 1 },
+    "personality": "CUNNING",
+    "patience": 4,
+    "tolerance": 3,
+    "rapport_needed": 2
   }
 ]
