@@ -189,5 +189,31 @@
       "Denunciar por vías legales": { "dLC": 1, "dLD": 0, "dRapport": 0, "tags": ["order","law"] },
       "Aceptar un soborno":      { "dLC": 0,  "dLD": -1, "dRapport": -1, "tags": ["greed","corruption"] }
     }
+  },
+
+  {
+  "id": "q_deal_gold_1",
+  "text": "El demonio sonríe: \"¿Y cuánto vale tu lealtad?\"",
+  "tags": ["deal","profit","cunning"],
+  "choices": {
+    "Pagarle 5 monedas": { 
+      "dLC": 0, "dLD": 0, "dRapport": 0,
+      "tags": ["deal","profit"],
+      "event": { "type": "ask_gold", "amount": 5,
+                 "pay_rapport": 2, "refuse_rapport": -1,
+                 "flee_on_refuse": false, "join_on_pay": false,
+                 "message": "Te pide 5 monedas a cambio de buena voluntad." }
+    },
+    "Negarte": {
+      "dLC": 0, "dLD": 0, "dRapport": 0,
+      "tags": ["honor","prudence"]
+    },
+    "Responder con burla": {
+      "dLC": -1, "dLD": 0, "dRapport": 0,
+      "tags": ["mock","trick"],
+      "event": { "type": "trap", "penalty_rapport": 2, "flee_chance": 0.25,
+                 "message": "Era una pregunta trampa; se ofende fácilmente." }
+    }
   }
+}
 ]
