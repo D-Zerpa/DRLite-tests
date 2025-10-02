@@ -1311,7 +1311,7 @@ def show_menu(session) -> str:
         print("OPCION NO VALIDA. Intenta de nuevo.")
 
 
-def dispatch_action(session, option: str) -> None:
+def dispatch_action(session, option: str, demons_catalog: list[Demon]) -> None:
     """
     Dispatch the selected option to the corresponding session action.
     Follows your spec strictly.
@@ -1369,9 +1369,6 @@ def dispatch_action(session, option: str) -> None:
     else:
         print("OPCION NO VALIDA.")
 
-    else:
-        print("OPCION NO VALIDA.")
-
 
 def print_banner() -> None:
     print("SMT-lite Demon Recruitment 1.0 beta")
@@ -1423,7 +1420,7 @@ def run_game_loop(session: NegotiationSession, diff_level: int) -> None:
             if opcion == "0":
                 break
 
-            dispatch_action(session, opcion)
+            dispatch_action(session, opcion, demons_catalog)
 
             # Per your spec, check both conditions after actions:
             session.check_union()
@@ -1517,23 +1514,23 @@ def run_special_event(session: NegotiationSession, event: EventPayload) -> Dict[
     return {}
 
 
-def bootstrap_session(demons: list["Demon"], questions_pool: list["Question"],
+def bootstrap_session(demons_catalog:list["Demon"], questions_pool: list["Question"],
                       rng: "random.Random") -> "NegotiationSession":
     if os.path.exists(SAVE_PATH):
         ans = input("Found a save. Load it? (y/n): ").strip().lower()
         if ans == "y":
-            player, sess = load_game(SAVE_PATH, demons, questions_pool, rng)
+            player, sess = load_game(SAVE_PATH, demons_catalog, questions_pool, rng)
             if sess:
                 return sess
             # if no active session in save, start a new negotiation
-            current_demon = choose_demon(demons)  # (optionally bias to available-only)
+            current_demon = choose_demon(demons_catalog)  # (optionally bias to available-only)
             return NegotiationSession(player=player, demon=current_demon, question_pool=questions_pool, rng=rng)
 
     # New game
     player = Player(core_alignment=Alignment(0, 0))
     player.gold = 0
     player.inventory = {}
-    current_demon = choose_demon(demons)
+    current_demon = choose_demon(demons_catalog)
     return NegotiationSession(player=player, demon=current_demon, question_pool=questions_pool, rng=rng)
 
 # =========================
@@ -1605,7 +1602,7 @@ def main() -> None:
 
     # 9) Demons (independent of the above; do it now)
     try:
-        demons = load_demons("data/demons.json")
+        demons_catalog = load_demons("data/demons.json")
     except Exception as e:
         raise RuntimeError(f"[demons] Failed to load demons: {e}") from e
 
@@ -1613,9 +1610,9 @@ def main() -> None:
     diff_level = read_difficulty()
 
     # Choose a demon using the same RNG (consistent with the session RNG)
-    current_demon = choose_demon(demons)  # If you added rng param: choose_demon(demons, rng=rng)
+    current_demon = choose_demon(demons_catalog)  # If you added rng param: choose_demon(demons, rng=rng)
 
-    session = bootstrap_session(demons, questions_pool, rng)
+    session = bootstrap_session(demons_catalog, questions_pool, rng)
 
     # 11) Run loop with graceful keyboard interrupt handling
     try:
