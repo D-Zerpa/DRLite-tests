@@ -9,10 +9,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Dict, List, Tuple, Optional, TypedDict, Set, Final, Any, Literal, NotRequired
 from enum import Enum
-import os
+import os, json, tempfile
 import random
 import time
-import json
 
 # ====== Global registry and Defaults ======
 RAPPORT_MIN, RAPPORT_MAX = -3, 3
@@ -25,6 +24,8 @@ ITEM_CATALOG: Dict[str, ItemDef] = {}
 EVENTS_REGISTRY: Dict[str, EventPayload] = {}
 WHIMS_CONFIG: Dict[str, Any] = {}
 WHIM_TEMPLATES: List[EventPayload] = []
+PERSONALITY_CUES_BY_NAME: Dict[str, Dict[str, str]] = {}
+SAVE_PATH = "saves/slot1.json"
 
 # =========================
 # OOP Models
@@ -105,6 +106,17 @@ class Question:
     text: str
     choices: Dict[str, Effect]
     tags: List[str]
+
+@dataclass(slots=True)
+class ReactionFeedback:
+    """Outcome summary to present to the UI layer (no prints here)."""
+    tone: str                 # "Delighted", "Pleased", "Neutral", "Annoyed", "Enraged"
+    cue: str                  # short cue like "*giggles*" or emoji
+    delta_rapport: int        # clamped per-turn change actually applied
+    delta_distance: int       # stance→demon Manhattan distance change (negative = closer)
+    liked_tags: List[str]     # tags that matched positive weights
+    disliked_tags: List[str]  # tags that matched negative weights
+    notes: List[str]          # extra notes (e.g. “Not enough gold.”)
 
 @dataclass(eq= False, slots = True)
 class Demon:
@@ -246,9 +258,10 @@ class NegotiationSession:
     fled: bool = False
     round_no: int = 1
     rng: Optional[random.Random] = None
+    
 
     # Avoid repeating questions within the session
-
+    last_feedback: Optional[ReactionFeedback] = field(default=None, repr=False)
     _used_question_ids: Set[str] = field(default_factory = set, repr = False)
 
     def __post_init__(self):
@@ -390,26 +403,50 @@ class NegotiationSession:
         - Decrement turns and relax player's posture.
         - Print a compact summary.
         """
+        # Pre-state
+        stance = self.player.stance_alignment
+        dist_before = stance.manhattan_distance(self.demon.alignment)
+        rapport_before = self.rapport
+
         # 1) Apply stance deltas
         d_lc = int(effect.get("dLC", 0))
         d_ld = int(effect.get("dLD", 0))
-        self.player.stance_alignment.law_chaos += d_lc
-        self.player.stance_alignment.light_dark += d_ld
-        self.player.stance_alignment.clamp()  # keeps stance within global bounds
+        stance.law_chaos += d_lc
+        stance.light_dark += d_ld
+        stance.clamp()
 
-        # 2) Demon reaction → rapport delta (tolerance stays unchanged in Phase A)
+        # 2) Demon reaction → rapport delta (Phase B uses personality weights)
         d_rep, _ = self.demon.react(effect)
+        self.rapport = max(RAPPORT_MIN, min(RAPPORT_MAX, self.rapport + d_rep))
 
-        # 3) Clamp rapport using global limits
-        new_rapport = self.rapport + d_rep
-        self.rapport = max(RAPPORT_MIN, min(RAPPORT_MAX, new_rapport))
-
-        # 4) Turns and posture relaxation
+        # 3) Advance turn and relax posture
         self.turns_left -= 1
         self.player.relax_posture()
 
-        # 5) Summary
-        print(f"Δ Stance: LC {d_lc:+}, LD {d_ld:+} | Rapport: {self.rapport} | Turns left: {self.turns_left}")
+        # 4) Compute distance change AFTER relaxation (more informative)
+        dist_after = stance.manhattan_distance(self.demon.alignment)
+        delta_distance = dist_after - dist_before  # negative means closer
+
+        # 5) Build feedback
+        tone, default_emoji = _tone_from_delta(d_rep)
+        tags = effect.get("tags", []) if isinstance(effect, dict) else getattr(effect, "tags", [])
+        if not isinstance(tags, list): tags = [tags]
+        tags = [str(t).lower() for t in tags]
+        liked, disliked = _split_tag_sentiment(self.demon.personality, tags)
+
+        fb = ReactionFeedback(
+            tone=tone,
+            cue=_flavor_cue(self.demon.personality, tone, default_emoji),
+            delta_rapport=d_rep,
+            delta_distance=delta_distance,
+            liked_tags=liked,
+            disliked_tags=disliked,
+            notes=[f"Δ Stance: LC {d_lc:+}, LD {d_ld:+}",
+                f"Rapport: {rapport_before} → {self.rapport}",
+                f"Distance: {dist_before} → {dist_after} ({delta_distance:+})"]
+        )
+        self.last_feedback = fb
+        return fb
 
 
 
@@ -485,13 +522,91 @@ class NegotiationSession:
             # Match your field name; if you used 'available' in Demon, set that.
             if hasattr(self.demon, "available"):
                 self.demon.available = False
-            print(f"{self.demon.name} has joined your roster!")    
+            print(f"{self.demon.name} has joined your roster!")
+
+    def maybe_trigger_whim(self) -> Optional[EventPayload]:
+        """Use WHIMS_CONFIG/WHIM_TEMPLATES to maybe emit a whim event."""
+        if not WHIM_TEMPLATES:
+            return None
+        base = float(WHIMS_CONFIG.get("base_chance", 0.0))
+        mod = WHIMS_CONFIG.get("personality_mod", {})
+        base += float(mod.get(self.demon.personality.name, 0.0))
+        if self.rng.random() >= max(0.0, min(1.0, base)):
+            return None
+
+        # filter by conditions (e.g., only_if_has_item)
+        candidates: List[EventPayload] = []
+        for e in WHIM_TEMPLATES:
+            etype = e.get("type")
+            if etype == "ask_item" and e.get("only_if_has_item", False):
+                item = canonical_item_id(e.get("item", ""))
+                amt = int(e.get("amount", 1))
+                if not self.player.has_item(item, amt):
+                    continue
+            candidates.append(e)
+
+        if not candidates:
+            return None
+
+        tmpl = _weighted_choice(self.rng, candidates)
+        if not tmpl:
+            return None
+
+        # Instantiate ranges (amount_range) into concrete values
+        inst = dict(tmpl)
+        if "amount_range" in inst and isinstance(inst["amount_range"], list) and len(inst["amount_range"]) == 2:
+            lo, hi = int(inst["amount_range"][0]), int(inst["amount_range"][1])
+            inst["amount"] = self.rng.randint(min(lo, hi), max(lo, hi))
+            inst.pop("amount_range", None)
+
+        # Mark as whim so your process_event path can treat it specially if desired
+        inst["type"] = inst.get("type", "whim")
+        inst["kind"] = inst.get("type")  # optional
+        return inst  # EventPayload 
 
     def finish_fled(self) -> None:
             """If fled, notify."""
             if self.fled:
                 print(f"The negotiation with {self.demon.name} ended. The demon walked away.")
 
+# =========================
+# OOP Models (Save state)
+# =========================
+
+class SaveAlignment(TypedDict):
+    lc: int
+    ld: int
+
+class SavePlayer(TypedDict):
+    core: SaveAlignment
+    stance: SaveAlignment
+    gold: int
+    inventory: Dict[str, int]     # item_id -> qty
+    roster: List[str]             # demon ids
+
+class SaveWorld(TypedDict):
+    demons: Dict[str, Dict[str, bool]]  # demon_id -> {"available": bool}
+
+class SaveDex(TypedDict, total=False):
+    seen: List[str]
+    caught: List[str]
+
+class SaveSession(TypedDict, total=False):
+    in_progress: bool
+    demon_id: str
+    rapport: int
+    turns_left: int
+    round_no: int
+    recruited: bool
+    fled: bool
+
+class SaveGame(TypedDict):
+    version: int
+    timestamp: str
+    player: SavePlayer
+    world: SaveWorld
+    session: Optional[SaveSession]
+    demondex: Optional[SaveDex]
 
 # =========================
 # Helpers
@@ -559,6 +674,229 @@ def resolve_event_ref(effect: Effect) -> Effect:
     eff = dict(effect)
     eff["event"] = payload  # do NOT delete event_ref; harmless to keep or remove
     return eff
+
+def _flavor_cue(personality: Personality, tone: str, default_emoji: str) -> str:
+    return PERSONALITY_CUES_BY_NAME.get(personality, {}).get(tone, default_emoji)
+
+def _split_tag_sentiment(personality: Personality, tags: List[str]) -> tuple[List[str], List[str]]:
+    """Classify which tags were liked/disliked based on loaded weights (JSON)."""
+    weights = PERSONALITY_TAG_WEIGHTS.get(personality, {})
+    liked, disliked = [], []
+    for t in tags:
+        w = int(weights.get(t, 0))
+        if w > 0:  liked.append(t)
+        elif w < 0: disliked.append(t)
+    return liked, disliked
+
+def rapport_gauge(val: int, lo: int = RAPPORT_MIN, hi: int = RAPPORT_MAX) -> str:
+    """
+    Text gauge for rapport. Example (min=-3..max=3):
+    [··|·#··]  → '|' marks 0; '#' marks current value.
+    """
+    width = hi - lo + 1
+    width = max(3, width)  # safety
+    cells = ["·"] * width
+
+    # current index and zero-index (clamped)
+    idx = max(0, min(width - 1, val - lo))
+    zero = max(0, min(width - 1, 0 - lo))
+
+    cells[zero] = "|"     # zero marker
+    cells[idx] = "#"      # current value
+    return "[" + "".join(cells) + "]"
+
+
+def distance_trend(delta: int) -> str:
+    """
+    Arrow showing how distance changed this turn:
+      < 0 → closer; > 0 → farther; 0 → unchanged.
+    """
+    if delta < 0:
+        return "↘ closer"
+    if delta > 0:
+        return "↗ farther"
+    return "→ unchanged"
+
+def flavor_cue(personality: Personality, tone: str, default_emoji: str = "😐") -> str:
+    """
+    Return a personality-flavored cue string for a given tone.
+    Falls back to default_emoji when missing.
+    """
+    per = PERSONALITY_CUES_BY_NAME.get(personality.name, {})
+    return per.get(tone, default_emoji)
+
+def _tone_from_delta(delta_rapport: int) -> tuple[str, str]:
+    """Map rapport delta to a tone label and a generic cue emoji."""
+    if delta_rapport >= 2:   return ("Delighted", "😄")
+    if delta_rapport == 1:   return ("Pleased",   "🙂")
+    if delta_rapport == 0:   return ("Neutral",   "😐")
+    if delta_rapport == -1:  return ("Annoyed",   "🙁")
+    return ("Enraged", "😠")  # delta <= -2
+
+
+# =========================
+# Save/load helpers
+# =========================
+
+def player_to_save(p: "Player") -> SavePlayer:
+    inv = getattr(p, "inventory", {}) or {}
+    return {
+        "core":  alignment_to_save(p.core_alignment),
+        "stance": alignment_to_save(p.stance_alignment),
+        "gold": int(getattr(p, "gold", 0)),
+        "inventory": {str(k): int(v) for k, v in inv.items()},
+        "roster": [demon_id(d) for d in getattr(p, "roster", [])],
+    }
+
+def world_to_save(demons: List["Demon"]) -> SaveWorld:
+    return {
+        "demons": {demon_id(d): {"available": bool(getattr(d, "available", True))}
+                   for d in demons}
+    }
+
+def session_to_save(s: Optional["NegotiationSession"]) -> Optional[SaveSession]:
+    if not s:
+        return None
+    return {
+        "in_progress": bool(s.in_progress),
+        "demon_id": demon_id(s.demon),
+        "rapport": int(s.rapport),
+        "turns_left": int(s.turns_left),
+        "round_no": int(s.round_no),
+        "recruited": bool(s.recruited),
+        "fled": bool(s.fled),
+    }
+
+def dex_to_save(player: "Player") -> Optional[SaveDex]:
+    # Placeholder simple: si aún no llevas estos sets, guarda vacío o None
+    seen = list(getattr(player, "dex_seen", []))
+    caught = [demon_id(d) for d in getattr(player, "roster", [])]
+    return {"seen": seen, "caught": caught} if (seen or caught) else None
+
+def save_game(path: str, player: "Player", demons: List["Demon"],
+              session: Optional["NegotiationSession"]) -> None:
+    data: SaveGame = {
+        "version": SAVE_VERSION,
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "player": player_to_save(player),
+        "world": world_to_save(demons),
+        "session": session_to_save(session) if session and session.in_progress else None,
+        "demondex": dex_to_save(player),
+    }
+
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    fd, tmp = tempfile.mkstemp(prefix=".tmp_save_", dir=os.path.dirname(path) or ".")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        os.replace(tmp, path)  # atomic on same filesystem
+        print(f"[save] Saved to {path}")
+    except Exception:
+        try: os.remove(tmp)
+        except OSError: pass
+        raise
+
+def load_game(path: str, demons: List["Demon"], questions_pool: List["Question"],
+              rng: "random.Random") -> Tuple["Player", Optional["NegotiationSession"]]:
+    with open(path, "r", encoding="utf-8") as f:
+        data: SaveGame = json.load(f)
+
+    if int(data.get("version", 0)) != SAVE_VERSION:
+        raise ValueError(f"Incompatible save version: {data.get('version')} != {SAVE_VERSION}")
+
+    # Player
+    sp = data["player"]
+    player = Player(core_alignment=alignment_from_save(sp["core"]))
+    player.stance_alignment = alignment_from_save(sp["stance"])
+    player.gold = int(sp.get("gold", 0))
+    player.inventory = {str(k): int(v) for k, v in sp.get("inventory", {}).items()}
+
+    # Demons: index + availability + roster
+    idx = build_demon_index(demons)
+
+    for did, meta in data.get("world", {}).get("demons", {}).items():
+        if did in idx and hasattr(idx[did], "available"):
+            idx[did].available = bool(meta.get("available", True))
+
+    for did in sp.get("roster", []):
+        if did in idx:
+            d = idx[did]
+            if d not in player.roster:
+                player.roster.append(d)
+            if hasattr(d, "available"):
+                d.available = False
+        else:
+            print(f"[load] Warning: roster demon '{did}' not found in catalog.")
+
+    # DemonDex (opcional)
+    dex = data.get("demondex")
+    if dex:
+        player.dex_seen = set(dex.get("seen", []))
+        # caught ya se reflejó en roster; puedes sincronizar si quieres
+
+    # Session (opcional)
+    ss = data.get("session")
+    if ss:
+        demon_id_in_save = ss["demon_id"]
+        if demon_id_in_save not in idx:
+            raise KeyError(f"Saved demon '{demon_id_in_save}' missing from catalog.")
+        d = idx[demon_id_in_save]
+        sess = NegotiationSession(player=player, demon=d, question_pool=questions_pool, rng=rng)
+        sess.in_progress = bool(ss.get("in_progress", True))
+        sess.rapport = int(ss.get("rapport", 0))
+        sess.turns_left = int(ss.get("turns_left", d.patience))
+        sess.round_no = int(ss.get("round_no", 1))
+        sess.recruited = bool(ss.get("recruited", False))
+        sess.fled = bool(ss.get("fled", False))
+        return player, sess
+
+    return player, None
+
+# =========================
+# Serialization helpers
+# =========================
+
+SAVE_VERSION = 2  # bump if you change format later
+
+def demon_id(d: "Demon") -> str:
+    return d.id  # ahora existe siempre
+
+def build_demon_index(demons: List["Demon"]) -> Dict[str, "Demon"]:
+    idx = {}
+    for d in demons:
+        if d.id in idx:
+            raise ValueError(f"Duplicate demon id: {d.id}")
+        idx[d.id] = d
+    return idx
+
+def alignment_to_save(a: "Alignment") -> SaveAlignment:
+    return {"lc": int(a.law_chaos), "ld": int(a.light_dark)}
+
+def alignment_from_save(d: SaveAlignment) -> "Alignment":
+    return Alignment(law_chaos=int(d["lc"]), light_dark=int(d["ld"]))
+
+def save_game(path: str, player: "Player", demons: List["Demon"],
+              session: Optional["NegotiationSession"]) -> None:
+    data: SaveGame = {
+        "version": SAVE_VERSION,
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "player": player_to_save(player),
+        "world": world_to_save(demons),
+        "session": session_to_save(session) if session and session.in_progress else None,
+        "demondex": dex_to_save(player),
+    }
+
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    fd, tmp = tempfile.mkstemp(prefix=".tmp_save_", dir=os.path.dirname(path) or ".")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        os.replace(tmp, path)  # atomic on same filesystem
+        print(f"[save] Saved to {path}")
+    except Exception:
+        try: os.remove(tmp)
+        except OSError: pass
+        raise
 
 # =========================
 # Validation helpers
@@ -919,73 +1257,59 @@ def load_whims(path: str = "data/whims.json") -> None:
     WHIM_TEMPLATES = norm_entries
     print(f"[whims] Loaded {len(WHIM_TEMPLATES)} whim templates.")
 
+def load_personality_cues(path: str = "data/personality_cues.json") -> None:
+    """
+    Load textual cues per Personality from JSON into PERSONALITY_CUES_BY_NAME.
+    JSON schema: { "PLAYFUL": {"Delighted":"...", "Pleased":"...", ...}, ... }
+    Keys are personality names (case-insensitive). Tone keys are used as-is.
+    Missing file → empty table (fallback to default emoji at usage).
+    """
+    global PERSONALITY_CUES_BY_NAME
+
+    if not os.path.exists(path):
+        print(f"[cues] {path} not found. Using default emoji-only cues.")
+        PERSONALITY_CUES_BY_NAME = {}
+        return
+
+    with open(path, "r", encoding="utf-8") as f:
+        raw = json.load(f)
+
+    if not isinstance(raw, dict):
+        raise ValueError("personality_cues.json must be an object mapping personality -> {tone: cue}.")
+
+    # Normalize personality keys to upper-case names
+    table: Dict[str, Dict[str, str]] = {}
+    for pname, tones in raw.items():
+        if not isinstance(tones, dict):
+            raise ValueError(f"Cues for '{pname}' must be an object.")
+        table[str(pname).strip().upper()] = {str(k): str(v) for k, v in tones.items()}
+
+    PERSONALITY_CUES_BY_NAME = table
+    total = sum(len(v) for v in table.values())
+    print(f"[cues] Loaded {total} cues across {len(table)} personalities.")
 
 # =========================
 #  Console-layer Functions
 # =========================
 
 def show_menu(session) -> str:
-    """
-    Print the console menu and return the chosen option as a string.
-    If the session already ended, return "0".
-    """
     if not session.in_progress:
         print("La negociación ha terminado...")
         return "0"
-
     print("\n¿Qué deseas hacer?")
     print("1) Responder la siguiente pregunta")
     print("2) Bromear (minijuego rápido para ajustar rapport)")
     print("3) Mostrar estado de la sesión")
     print("4) Intentar cerrar trato ahora (evaluar unión)")
     print("5) Despedirse (terminar negociación)")
-
-    valid = {"1", "2", "3", "4", "5"}
+    print("6) Guardar y salir")  # NEW
+    valid = {"1","2","3","4","5","6"}
     while True:
-        choice = input("Elige una opción (1-5): ").strip()
+        choice = input("Elige una opción (1-6): ").strip()
         if choice in valid:
             return choice
         print("OPCION NO VALIDA. Intenta de nuevo.")
 
-def maybe_trigger_whim(self) -> Optional[EventPayload]:
-    """Use WHIMS_CONFIG/WHIM_TEMPLATES to maybe emit a whim event."""
-    if not WHIM_TEMPLATES:
-        return None
-    base = float(WHIMS_CONFIG.get("base_chance", 0.0))
-    mod = WHIMS_CONFIG.get("personality_mod", {})
-    base += float(mod.get(self.demon.personality.name, 0.0))
-    if self.rng.random() >= max(0.0, min(1.0, base)):
-        return None
-
-    # filter by conditions (e.g., only_if_has_item)
-    candidates: List[EventPayload] = []
-    for e in WHIM_TEMPLATES:
-        etype = e.get("type")
-        if etype == "ask_item" and e.get("only_if_has_item", False):
-            item = canonical_item_id(e.get("item", ""))
-            amt = int(e.get("amount", 1))
-            if not self.player.has_item(item, amt):
-                continue
-        candidates.append(e)
-
-    if not candidates:
-        return None
-
-    tmpl = _weighted_choice(self.rng, candidates)
-    if not tmpl:
-        return None
-
-    # Instantiate ranges (amount_range) into concrete values
-    inst = dict(tmpl)
-    if "amount_range" in inst and isinstance(inst["amount_range"], list) and len(inst["amount_range"]) == 2:
-        lo, hi = int(inst["amount_range"][0]), int(inst["amount_range"][1])
-        inst["amount"] = self.rng.randint(min(lo, hi), max(lo, hi))
-        inst.pop("amount_range", None)
-
-    # Mark as whim so your process_event path can treat it specially if desired
-    inst["type"] = inst.get("type", "whim")
-    inst["kind"] = inst.get("type")  # optional
-    return inst  # EventPayload
 
 def dispatch_action(session, option: str) -> None:
     """
@@ -994,13 +1318,22 @@ def dispatch_action(session, option: str) -> None:
     """
     if option == "1":
         effect = session.ask()
-        session.process_answer(effect)
+        feedback = session.process_answer(effect)  # now returns ReactionFeedback
 
-        # NEW: handle special event if present
-        evt = effect.get("event") if isinstance(effect, dict) else None
-        if evt:
-            decision = run_special_event(session, evt)  # returns a dict with user's choice
-            session.process_event(evt, decision)
+        # Show reaction feedback (console layer)
+        print(f"{session.demon.name} looks {feedback.tone.lower()}. {feedback.cue}")
+        # Optional hints (only print if non-empty)
+        if feedback.liked_tags:
+            print("  Liked tags: " + ", ".join(feedback.liked_tags))
+        if feedback.disliked_tags:
+            print("  Disliked tags: " + ", ".join(feedback.disliked_tags))
+        # Compact numbers (you already show a HUD elsewhere, this is just a quick glance)
+        print("  " + " | ".join(feedback.notes))
+
+        # Intuitive indicators
+
+        print(f"  Rapport gauge: {rapport_gauge(session.rapport)}")
+        print(f"  Distance trend: {distance_trend(feedback.delta_distance)}")
 
     elif option == "2":
         # Simple rapport mini-game: guess a number 0..2
@@ -1021,18 +1354,20 @@ def dispatch_action(session, option: str) -> None:
             session.rapport = max(RAPPORT_MIN, session.rapport - 1)
 
     elif option == "3":
-        # Show current session HUD
         session.show_status()
-
     elif option == "4":
-        # Try to close the deal now
         session.check_union()
-
     elif option == "5":
-        # End the negotiation voluntarily
         session.in_progress = False
         session.fled = True
         print(f"{session.demon.name} se marcha...")
+    elif option == "6":
+        save_game(SAVE_PATH, session.player, demons_catalog, session)
+        print("Game saved. Exiting…")
+        session.in_progress = False
+        session.fled = True
+    else:
+        print("OPCION NO VALIDA.")
 
     else:
         print("OPCION NO VALIDA.")
@@ -1103,46 +1438,16 @@ def run_game_loop(session: NegotiationSession, diff_level: int) -> None:
 
             # Advance round
             session.round_no += 1
+
+            # autosave at end of round
+            save_game(SAVE_PATH, session.player, demons_catalog, session)           
     
-    except (KeyboardInterrumpt, E0FError):
+    except (KeyboardInterrupt, EOFError):
         # Smooth exit: stop the session and mark as fled
         print("\n[!] Interrupted by user. Ending negotiation softly…")
+        save_game(SAVE_PATH, session.player, demons_catalog, session)
         session.in_progress = False
         session.fled = True
-
-def run_special_event(session: NegotiationSession, event: EventPayload) -> Dict[str, Any]:
-    """
-    Console interaction for special events. Returns a decision dict consumed by process_event.
-    """
-    et = str(event.get("type", "")).lower()
-    msg = event.get("message")
-    if msg:
-        print(f"\n[Evento] {msg}")
-
-    if et in ("ask_gold", "whim") and (event.get("kind") == "ask_gold" or et == "ask_gold"):
-        amount = int(event.get("amount", 0))
-        print(f"Te quedan {session.player.gold} monedas.")
-        while True:
-            ans = input(f"¿Pagar {amount} monedas? (s/n): ").strip().lower()
-            if ans in ("s", "n"):
-                return {"pay": ans == "s"}
-
-    if et == "ask_item":
-        item = str(event.get("item", "")).lower()
-        have = session.player.inventory.get(item, 0)
-        print(f"Tienes {have}x {item}.")
-        while True:
-            ans = input(f"¿Entregar {item}? (s/n): ").strip().lower()
-            if ans in ("s", "n"):
-                return {"give": ans == "s"}
-
-    if et == "trap":
-        print("…(algo no huele bien).")
-        # No decision needed; return empty dict
-        return {}
-
-    # Default: nothing to decide
-    return {}
 
 def summarize_session(session: NegotiationSession) -> None:
     """
@@ -1168,7 +1473,7 @@ def summarize_session(session: NegotiationSession) -> None:
     print(f"Rounds played: {session.round_no - 1}")
     print(f"Roster: {', '.join(roster_names) if roster_names else '(empty)'}")
 
-    def run_special_event(session: NegotiationSession, event: EventPayload) -> Dict[str, Any]:
+def run_special_event(session: NegotiationSession, event: EventPayload) -> Dict[str, Any]:
     """
     Console interaction for special events. Returns a decision dict.
     """
@@ -1211,6 +1516,26 @@ def summarize_session(session: NegotiationSession) -> None:
 
     return {}
 
+
+def bootstrap_session(demons: list["Demon"], questions_pool: list["Question"],
+                      rng: "random.Random") -> "NegotiationSession":
+    if os.path.exists(SAVE_PATH):
+        ans = input("Found a save. Load it? (y/n): ").strip().lower()
+        if ans == "y":
+            player, sess = load_game(SAVE_PATH, demons, questions_pool, rng)
+            if sess:
+                return sess
+            # if no active session in save, start a new negotiation
+            current_demon = choose_demon(demons)  # (optionally bias to available-only)
+            return NegotiationSession(player=player, demon=current_demon, question_pool=questions_pool, rng=rng)
+
+    # New game
+    player = Player(core_alignment=Alignment(0, 0))
+    player.gold = 0
+    player.inventory = {}
+    current_demon = choose_demon(demons)
+    return NegotiationSession(player=player, demon=current_demon, question_pool=questions_pool, rng=rng)
+
 # =========================
 #  Main function
 # =========================
@@ -1236,6 +1561,12 @@ def main() -> None:
     except Exception as e:
         print(f"[weights] Error: {e}. Personality bonuses disabled.")
         # if you want, keep PERSONALITY_TAG_WEIGHTS = {} here
+
+    try:
+        load_personality_cues("data/personality_cues.json")
+    except Exception as e:
+        print(f"[weights] Error: {e}. Personality bonuses disabled.")
+
 
     # 4) Items catalog (needed before validating events/questions that reference items)
     try:
@@ -1278,25 +1609,13 @@ def main() -> None:
     except Exception as e:
         raise RuntimeError(f"[demons] Failed to load demons: {e}") from e
 
-    # 10) Build core objects (player/session)
-    player = Player(core_alignment=Alignment(0, 0))
-    # (Optional) seed some starting resources for testing
-    # player.gold = 10
-    # player.add_item("leaf of life", 2)
-    # player.add_item("odd morsel", 3)
-
     # Difficulty input (validated and clamped inside the function)
     diff_level = read_difficulty()
 
     # Choose a demon using the same RNG (consistent with the session RNG)
     current_demon = choose_demon(demons)  # If you added rng param: choose_demon(demons, rng=rng)
 
-    session = NegotiationSession(
-        player=player,
-        demon=current_demon,
-        question_pool=questions_pool,
-        rng=rng,  # ensures all randomness in-session uses the same source
-    )
+    session = bootstrap_session(demons, questions_pool, rng)
 
     # 11) Run loop with graceful keyboard interrupt handling
     try:

@@ -1,0 +1,81 @@
+{
+  "ev_ask_gold_small": {
+    "type": "ask_gold",
+    "amount": 5,
+    "pay_rapport": 2,
+    "refuse_rapport": 1,
+    "flee_on_refuse": false,
+    "join_on_pay": false,
+    "message": "Te pide 5 monedas a cambio de buena voluntad."
+  },
+  "ev_ask_gold_medium": {
+    "type": "ask_gold",
+    "amount": 10,
+    "pay_rapport": 2,
+    "refuse_rapport": 1,
+    "flee_on_refuse": false,
+    "join_on_pay": false,
+    "message": "Exige 10 monedas para tomarte en serio."
+  },
+  "ev_ask_gold_bribe_join": {
+    "type": "ask_gold",
+    "amount": 20,
+    "pay_rapport": 2,
+    "refuse_rapport": 2,
+    "flee_on_refuse": false,
+    "join_on_pay": true,
+    "message": "Promete unirse si pagas 20 monedas ahora mismo."
+  },
+  "ev_ask_item_leaf": {
+    "type": "ask_item",
+    "item": "leaf of life",
+    "amount": 1,
+    "consume": true,
+    "give_rapport": 2,
+    "decline_rapport": 0,
+    "join_on_give": false,
+    "message": "Te pide 1x Leaf of Life como ofrenda."
+  },
+  "ev_ask_item_morsel": {
+    "type": "ask_item",
+    "item": "odd morsel",
+    "amount": 1,
+    "consume": true,
+    "give_rapport": 1,
+    "decline_rapport": 0,
+    "join_on_give": false,
+    "message": "Quiere probar un Odd Morsel."
+  },
+  "ev_ask_item_holy": {
+    "type": "ask_item",
+    "item": "holy water",
+    "amount": 1,
+    "consume": true,
+    "give_rapport": 2,
+    "decline_rapport": 1,
+    "join_on_give": false,
+    "message": "Exige 1x Holy Water para purificar el trato."
+  },
+  "ev_ask_item_coin_bribe": {
+    "type": "ask_item",
+    "item": "rusted coin",
+    "amount": 3,
+    "consume": true,
+    "give_rapport": 1,
+    "decline_rapport": 0,
+    "join_on_give": false,
+    "message": "Pide 3x Rusted Coin como 'peaje'."
+  },
+  "ev_trap_mock": {
+    "type": "trap",
+    "penalty_rapport": 2,
+    "flee_chance": 0.25,
+    "message": "Era una pregunta trampa; se ofende con tus burlas."
+  },
+  "ev_trap_pride": {
+    "type": "trap",
+    "penalty_rapport": 1,
+    "flee_chance": 0.10,
+    "message": "Se siente insultado por tu falta de respeto."
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "PLAYFUL":  { "Delighted": "*giggles*", "Pleased": "*smiles*", "Neutral": "…", "Annoyed": "*pouts*", "Enraged": "*throws a tantrum*" },
+  "CHILDISH": { "Delighted": "*claps*",   "Pleased": "*grins*",  "Neutral": "…", "Annoyed": "*whines*", "Enraged": "*cries loudly*" },
+  "MOODY":    { "Delighted": "*smirks*",  "Pleased": "*nods*",   "Neutral": "…", "Annoyed": "*glares*", "Enraged": "*snaps*" },
+  "CUNNING":  { "Delighted": "*grins slyly*", "Pleased": "*chuckles*", "Neutral": "…", "Annoyed": "*narrows eyes*", "Enraged": "*hisses*" },
+  "PROUD":    { "Delighted": "*nods approvingly*", "Pleased": "*smiles faintly*", "Neutral": "…", "Annoyed": "*scoffs*", "Enraged": "*looks insulted*" }
+}

@@ -2,14 +2,13 @@
   {
     "id": "q_mercy_1",
     "text": "Un enemigo derrotado suplica por su vida. ¿Qué haces?",
-    "tags": ["mercy", "order", "ruthless"],               
+    "tags": ["mercy", "order", "ruthless"],
     "choices": {
-      "Mostrar piedad":         {"dLC": 0, "dLD": 1,  "dRapport": 1,  "tags": ["mercy","light"]},
-      "Capturarlo y juzgarlo":  {"dLC": 1, "dLD": 0,  "dRapport": 0,  "tags": ["order","justice"]},
-      "Acabar con él":          {"dLC": 0, "dLD": -1, "dRapport": -1, "tags": ["ruthless","dark"]}
+      "Mostrar piedad":         { "dLC": 0, "dLD": 1,  "dRapport": 1,  "tags": ["mercy","light"] },
+      "Capturarlo y juzgarlo":  { "dLC": 1, "dLD": 0,  "dRapport": 0,  "tags": ["order","justice"] },
+      "Acabar con él":          { "dLC": 0, "dLD": -1, "dRapport": -1, "tags": ["ruthless","dark"] }
     }
   },
-
   {
     "id": "q_mercy_2",
     "text": "Encuentras a un ladrón hambriento robando pan. ¿Qué haces?",
@@ -35,9 +34,9 @@
     "text": "Te ofrecen un trato muy lucrativo con cláusulas moralmente grises.",
     "tags": ["profit","pragmatism","ethics"],
     "choices": {
-      "Aceptar tal cual":         { "dLC": -1, "dLD": -1, "dRapport": 0,  "tags": ["profit","greed"] },
-      "Negociar mejores términos":{ "dLC": 0,  "dLD": 0,  "dRapport": 1,  "tags": ["pragmatism","cunning"] },
-      "Rechazar por principios":  { "dLC": 1,  "dLD": 1,  "dRapport": 0,  "tags": ["honor","virtue"] }
+      "Aceptar tal cual":          { "dLC": -1, "dLD": -1, "dRapport": 0,  "tags": ["profit","greed"] },
+      "Negociar mejores términos": { "dLC": 0,  "dLD": 0,  "dRapport": 1,  "tags": ["pragmatism","cunning"] },
+      "Rechazar por principios":   { "dLC": 1,  "dLD": 1,  "dRapport": 0,  "tags": ["honor","virtue"] }
     }
   },
   {
@@ -45,9 +44,9 @@
     "text": "Un aliado cometió un error grave. ¿Cómo procedes?",
     "tags": ["loyalty","discipline","mercy"],
     "choices": {
-      "Cubrirlo esta vez":        { "dLC": 0,  "dLD": 1,  "dRapport": 1,  "tags": ["loyalty","mercy"] },
-      "Sanción justa":            { "dLC": 1,  "dLD": 0,  "dRapport": 0,  "tags": ["order","justice"] },
-      "Expulsarlo del grupo":     { "dLC": 0,  "dLD": -1, "dRapport": -1, "tags": ["ruthless","discipline"] }
+      "Cubrirlo esta vez":    { "dLC": 0,  "dLD": 1,  "dRapport": 1,  "tags": ["loyalty","mercy"] },
+      "Sanción justa":        { "dLC": 1,  "dLD": 0,  "dRapport": 0,  "tags": ["order","justice"] },
+      "Expulsarlo del grupo": { "dLC": 0,  "dLD": -1, "dRapport": -1, "tags": ["ruthless","discipline"] }
     }
   },
   {
@@ -55,9 +54,9 @@
     "text": "Ves una puerta con símbolos prohibidos. ¿La abres?",
     "tags": ["curiosity","taboo","risk"],
     "choices": {
-      "Abrirla sin dudar":       { "dLC": -1, "dLD": 0,  "dRapport": 1,  "tags": ["curiosity","reckless"] },
-      "Investigar primero":      { "dLC": 0,  "dLD": 0,  "dRapport": 0,  "tags": ["prudence","logic"] },
-      "Dejarla cerrada":         { "dLC": 1,  "dLD": 0,  "dRapport": -1, "tags": ["order","fear"] }
+      "Abrirla sin dudar":  { "dLC": -1, "dLD": 0,  "dRapport": 1,  "tags": ["curiosity","reckless"] },
+      "Investigar primero": { "dLC": 0,  "dLD": 0,  "dRapport": 0,  "tags": ["prudence","logic"] },
+      "Dejarla cerrada":    { "dLC": 1,  "dLD": 0,  "dRapport": -1, "tags": ["order","fear"] }
     }
   },
   {
@@ -65,9 +64,9 @@
     "text": "Un rival te provoca frente a la multitud.",
     "tags": ["honor","strength","pride"],
     "choices": {
-      "Aceptar el reto":         { "dLC": 1,  "dLD": 1,  "dRapport": 1,  "tags": ["honor","strength"] },
-      "Ignorarlo con calma":     { "dLC": 0,  "dLD": 0,  "dRapport": 0,  "tags": ["prudence","patience"] },
-      "Responder con burla":     { "dLC": -1, "dLD": 0,  "dRapport": -1, "tags": ["trick","mock"] }
+      "Aceptar el reto":     { "dLC": 1,  "dLD": 1,  "dRapport": 1,  "tags": ["honor","strength"] },
+      "Ignorarlo con calma": { "dLC": 0,  "dLD": 0,  "dRapport": 0,  "tags": ["prudence","patience"] },
+      "Responder con burla": { "dLC": -1, "dLD": 0,  "dRapport": -1, "tags": ["trick","mock"] }
     }
   },
   {
@@ -75,9 +74,9 @@
     "text": "Necesitas entrar a un archivo restringido.",
     "tags": ["trick","order","cunning"],
     "choices": {
-      "Colarte disfrazado":      { "dLC": -1, "dLD": 0,  "dRapport": 1,  "tags": ["trick","stealth"] },
-      "Pedir permiso formal":    { "dLC": 1,  "dLD": 0,  "dRapport": 0,  "tags": ["order","protocol"] },
-      "Sobornar al guardia":     { "dLC": 0,  "dLD": -1, "dRapport": -1, "tags": ["greed","corruption"] }
+      "Colarte disfrazado":   { "dLC": -1, "dLD": 0,  "dRapport": 1,  "tags": ["trick","stealth"] },
+      "Pedir permiso formal": { "dLC": 1,  "dLD": 0,  "dRapport": 0,  "tags": ["order","protocol"] },
+      "Sobornar al guardia":  { "dLC": 0,  "dLD": -1, "dRapport": -1, "tags": ["greed","corruption"] }
     }
   },
   {
@@ -85,9 +84,9 @@
     "text": "Un niño perdido te pide ayuda para volver a casa.",
     "tags": ["kindness","mercy","light"],
     "choices": {
-      "Acompañarlo de inmediato":{ "dLC": 0,  "dLD": 1,  "dRapport": 1,  "tags": ["kindness","mercy"] },
-      "Pedir a otros que lo lleven": { "dLC": 0, "dLD": 0, "dRapport": 0, "tags": ["delegation"] },
-      "Decir que no puedes":     { "dLC": 0,  "dLD": -1, "dRapport": -1, "tags": ["apathy"] }
+      "Acompañarlo de inmediato":     { "dLC": 0,  "dLD": 1,  "dRapport": 1,  "tags": ["kindness","mercy"] },
+      "Pedir a otros que lo lleven":  { "dLC": 0,  "dLD": 0,  "dRapport": 0,  "tags": ["delegation"] },
+      "Decir que no puedes":          { "dLC": 0,  "dLD": -1, "dRapport": -1, "tags": ["apathy"] }
     }
   },
   {
@@ -95,9 +94,9 @@
     "text": "Tu equipo está cansado, pero un botín valioso está cerca.",
     "tags": ["pragmatism","risk","discipline"],
     "choices": {
-      "Seguir ahora mismo":      { "dLC": -1, "dLD": 0,  "dRapport": 0,  "tags": ["risk","greed"] },
-      "Descansar y volver":      { "dLC": 1,  "dLD": 0,  "dRapport": 1,  "tags": ["order","prudence"] },
-      "Enviar a un explorador":  { "dLC": 0,  "dLD": 0,  "dRapport": 0,  "tags": ["cunning","scout"] }
+      "Seguir ahora mismo":   { "dLC": -1, "dLD": 0,  "dRapport": 0,  "tags": ["risk","greed"] },
+      "Descansar y volver":   { "dLC": 1,  "dLD": 0,  "dRapport": 1,  "tags": ["order","prudence"] },
+      "Enviar a un explorador": { "dLC": 0,  "dLD": 0,  "dRapport": 0,  "tags": ["cunning","scout"] }
     }
   },
   {
@@ -105,9 +104,9 @@
     "text": "Un grupo planea sabotear una ley injusta.",
     "tags": ["chaos","justice","freedom"],
     "choices": {
-      "Unirte al sabotaje":      { "dLC": -1, "dLD": 0,  "dRapport": 1,  "tags": ["chaos","freedom"] },
-      "Proponer reforma legal":  { "dLC": 1,  "dLD": 0,  "dRapport": 0,  "tags": ["order","justice"] },
-      "No involucrarte":         { "dLC": 0,  "dLD": 0,  "dRapport": -1, "tags": ["apathy"] }
+      "Unirte al sabotaje":   { "dLC": -1, "dLD": 0,  "dRapport": 1,  "tags": ["chaos","freedom"] },
+      "Proponer reforma legal": { "dLC": 1,  "dLD": 0,  "dRapport": 0,  "tags": ["order","justice"] },
+      "No involucrarte":      { "dLC": 0,  "dLD": 0,  "dRapport": -1, "tags": ["apathy"] }
     }
   },
   {
@@ -115,9 +114,9 @@
     "text": "Tu superior te da una orden que consideras inútil.",
     "tags": ["order","obedience","reason"],
     "choices": {
-      "Cumplir sin preguntas":   { "dLC": 1,  "dLD": 0,  "dRapport": 0,  "tags": ["order","obedience"] },
-      "Preguntar el porqué":     { "dLC": 0,  "dLD": 0,  "dRapport": 1,  "tags": ["reason","dialogue"] },
-      "Ignorar la orden":        { "dLC": -1, "dLD": 0,  "dRapport": -1, "tags": ["chaos","defiance"] }
+      "Cumplir sin preguntas": { "dLC": 1,  "dLD": 0,  "dRapport": 0,  "tags": ["order","obedience"] },
+      "Preguntar el porqué":   { "dLC": 0,  "dLD": 0,  "dRapport": 1,  "tags": ["reason","dialogue"] },
+      "Ignorar la orden":      { "dLC": -1, "dLD": 0,  "dRapport": -1, "tags": ["chaos","defiance"] }
     }
   },
   {
@@ -145,9 +144,9 @@
     "text": "Dos facciones rivales quieren tu apoyo.",
     "tags": ["cunning","deal","diplomacy"],
     "choices": {
-      "Jugar a ambos bandos":    { "dLC": -1, "dLD": 0,  "dRapport": 1,  "tags": ["cunning","deal"] },
-      "Mediar con honestidad":   { "dLC": 1,  "dLD": 0,  "dRapport": 0,  "tags": ["order","honesty"] },
-      "No tomar partido":        { "dLC": 0,  "dLD": 0,  "dRapport": -1, "tags": ["neutral","avoid"] }
+      "Jugar a ambos bandos":  { "dLC": -1, "dLD": 0,  "dRapport": 1,  "tags": ["cunning","deal"] },
+      "Mediar con honestidad": { "dLC": 1,  "dLD": 0,  "dRapport": 0,  "tags": ["order","honesty"] },
+      "No tomar partido":      { "dLC": 0,  "dLD": 0,  "dRapport": -1, "tags": ["neutral","avoid"] }
     }
   },
   {
@@ -155,9 +154,9 @@
     "text": "Te preguntan si rompiste una regla menor.",
     "tags": ["honesty","rule","consequence"],
     "choices": {
-      "Decir la verdad":         { "dLC": 1,  "dLD": 1,  "dRapport": 1,  "tags": ["honor","honesty"] },
-      "Mentir para zafar":       { "dLC": -1, "dLD": 0,  "dRapport": -1, "tags": ["trick","selfish"] },
-      "Evitar responder":        { "dLC": 0,  "dLD": 0,  "dRapport": 0,  "tags": ["cautious"] }
+      "Decir la verdad":   { "dLC": 1,  "dLD": 1,  "dRapport": 1,  "tags": ["honor","honesty"] },
+      "Mentir para zafar": { "dLC": -1, "dLD": 0,  "dRapport": -1, "tags": ["trick","selfish"] },
+      "Evitar responder":  { "dLC": 0,  "dLD": 0,  "dRapport": 0,  "tags": ["cautious"] }
     }
   },
   {
@@ -175,9 +174,9 @@
     "text": "Un demonio menor te propone un intercambio de favores.",
     "tags": ["deal","profit","trust"],
     "choices": {
-      "Aceptar con garantías":   { "dLC": 0,  "dLD": 0,  "dRapport": 1,  "tags": ["deal","caution"] },
-      "Aceptar a ciegas":        { "dLC": -1, "dLD": 0,  "dRapport": 0,  "tags": ["risk","trust"] },
-      "Rechazar la oferta":      { "dLC": 1,  "dLD": 0,  "dRapport": -1, "tags": ["prudence"] }
+      "Aceptar con garantías": { "dLC": 0,  "dLD": 0,  "dRapport": 1,  "tags": ["deal","caution"] },
+      "Aceptar a ciegas":      { "dLC": -1, "dLD": 0,  "dRapport": 0,  "tags": ["risk","trust"] },
+      "Rechazar la oferta":    { "dLC": 1,  "dLD": 0,  "dRapport": -1, "tags": ["prudence"] }
     }
   },
   {
@@ -185,61 +184,46 @@
     "text": "Descubres que un noble abusa de su poder.",
     "tags": ["justice","order","rebellion"],
     "choices": {
-      "Exponerlo públicamente":  { "dLC": -1, "dLD": 1,  "dRapport": 1,  "tags": ["justice","rebellion"] },
-      "Denunciar por vías legales": { "dLC": 1, "dLD": 0, "dRapport": 0, "tags": ["order","law"] },
-      "Aceptar un soborno":      { "dLC": 0,  "dLD": -1, "dRapport": -1, "tags": ["greed","corruption"] }
+      "Exponerlo públicamente":    { "dLC": -1, "dLD": 1,  "dRapport": 1,  "tags": ["justice","rebellion"] },
+      "Denunciar por vías legales": { "dLC": 1, "dLD": 0,  "dRapport": 0,  "tags": ["order","law"] },
+      "Aceptar un soborno":        { "dLC": 0,  "dLD": -1, "dRapport": -1, "tags": ["greed","corruption"] }
     }
   },
-
   {
-  "id": "q_deal_gold_1",
-  "text": "El demonio sonríe: \"¿Y cuánto vale tu lealtad?\"",
-  "tags": ["deal","profit","cunning"],
-  "choices": {
-    "Pagarle 5 monedas": { 
-      "dLC": 0, "dLD": 0, "dRapport": 0,
-      "tags": ["deal","profit"],
-      "event": { "type": "ask_gold", "amount": 5,
-                 "pay_rapport": 2, "refuse_rapport": -1,
-                 "flee_on_refuse": false, "join_on_pay": false,
-                 "message": "Te pide 5 monedas a cambio de buena voluntad." }
-    },
-    "Negarte": {
-      "dLC": 0, "dLD": 0, "dRapport": 0,
-      "tags": ["honor","prudence"]
-    },
-    "Responder con burla": {
-      "dLC": -1, "dLD": 0, "dRapport": 0,
-      "tags": ["mock","trick"],
-      "event": { "type": "trap", "penalty_rapport": 2, "flee_chance": 0.25,
-                 "message": "Era una pregunta trampa; se ofende fácilmente." }
-    }
-  }
-  },
-
-  {
-  "id": "q_item_ask_1",
-  "text": "El demonio entrecierra los ojos: \"Tráeme hojas de vida...\"",
-  "tags": ["deal","cunning","ritual"],
-  "choices": {
-    "Entregar 1 hoja de vida": {
-      "dLC": 0, "dLD": 0, "dRapport": 0,
-      "tags": ["deal","offering"],
-      "event": {
-        "type": "ask_item",
-        "item": "leaf of life",
-        "amount": 1,
-        "consume": true,
-        "give_rapport": 2,
-        "decline_rapport": 0,
-        "join_on_give": false,
-        "message": "Te pide 1x hoja de vida como ofrenda."
+    "id": "q_deal_gold_1",
+    "text": "El demonio sonríe: \"¿Y cuánto vale tu lealtad?\"",
+    "tags": ["deal","profit","cunning"],
+    "choices": {
+      "Pagarle 5 monedas": {
+        "dLC": 0, "dLD": 0, "dRapport": 0,
+        "tags": ["deal","profit"],
+        "event_ref": "ev_ask_gold_small"
+      },
+      "Negarte": {
+        "dLC": 0, "dLD": 0, "dRapport": 0,
+        "tags": ["honor","prudence"]
+      },
+      "Responder con burla": {
+        "dLC": -1, "dLD": 0, "dRapport": 0,
+        "tags": ["mock","trick"],
+        "event_ref": "ev_trap_mock"
       }
-    },
-    "Negarte": {
-      "dLC": 0, "dLD": 0, "dRapport": 0,
-      "tags": ["prudence"]
+    }
+  },
+  {
+    "id": "q_item_ask_1",
+    "text": "El demonio entrecierra los ojos: \"Tráeme hojas de vida...\"",
+    "tags": ["deal","cunning","ritual"],
+    "choices": {
+      "Entregar 1 hoja de vida": {
+        "dLC": 0, "dLD": 0, "dRapport": 0,
+        "tags": ["deal","offering"],
+        "event_ref": "ev_ask_item_leaf"
+      },
+      "Negarte": {
+        "dLC": 0, "dLD": 0, "dRapport": 0,
+        "tags": ["prudence"]
+      }
     }
   }
-}
 ]
