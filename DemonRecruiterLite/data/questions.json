@@ -215,5 +215,31 @@
                  "message": "Era una pregunta trampa; se ofende fácilmente." }
     }
   }
+  },
+
+  {
+  "id": "q_item_ask_1",
+  "text": "El demonio entrecierra los ojos: \"Tráeme hojas de vida...\"",
+  "tags": ["deal","cunning","ritual"],
+  "choices": {
+    "Entregar 1 hoja de vida": {
+      "dLC": 0, "dLD": 0, "dRapport": 0,
+      "tags": ["deal","offering"],
+      "event": {
+        "type": "ask_item",
+        "item": "leaf of life",
+        "amount": 1,
+        "consume": true,
+        "give_rapport": 2,
+        "decline_rapport": 0,
+        "join_on_give": false,
+        "message": "Te pide 1x hoja de vida como ofrenda."
+      }
+    },
+    "Negarte": {
+      "dLC": 0, "dLD": 0, "dRapport": 0,
+      "tags": ["prudence"]
+    }
+  }
 }
 ]

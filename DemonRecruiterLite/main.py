@@ -21,6 +21,10 @@ TOL_MIN, TOL_MAX         = 1, 5
 RNG_SEED                 = None
 ROUND_DELAY_SEC          = 0
 PERSONALITY_TAG_WEIGHTS: dict[Personality, dict[str, int]] = {}
+ITEM_CATALOG: Dict[str, ItemDef] = {}
+EVENTS_REGISTRY: Dict[str, EventPayload] = {}
+WHIMS_CONFIG: Dict[str, Any] = {}
+WHIM_TEMPLATES: List[EventPayload] = []
 
 # =========================
 # OOP Models
@@ -48,13 +52,21 @@ class EventPayload(TypedDict, total=False):
 
     # ask_item:
     item: NotRequired[str]
+    amount: NotRequired[int]
     consume: NotRequired[bool]
     give_rapport: NotRequired[int]
     decline_rapport: NotRequired[int]
+    ammount_range: NotRequired[List[int]]
+    join_on_give: NotRequired[int]
 
     # trap:
     penalty_rapport: NotRequired[int]
     flee_chance: NotRequired[float]
+
+    # whims:
+    kind: NotRequired[str]
+    only_if_has_item: NotRequired[bool]
+    weight: NotRequired[int]
 
 class Effect(TypedDict, total=False):
     dLC: int
@@ -62,6 +74,14 @@ class Effect(TypedDict, total=False):
     dRapport: int
     tags: List[str]
     event: EventPayload
+    event_ref: str
+
+class ItemDef(TypedDict, total=False):
+    display_name: str
+    rarity: Literal["common", "uncommon", "rare", "epic", "legendary"]
+    value: int
+    stackable: bool
+    description: str
 
 @dataclass(slots=True)
 class Alignment:
@@ -172,6 +192,44 @@ class Player:
 
         self.stance_alignment.clamp()
 
+    def add_item(self, name: str, qty: int = 1) -> None:
+        """Add items to the inventory using canonical IDs."""
+        iid = canonical_item_id(name)
+        if not iid:
+            return
+        self.inventory[iid] = self.inventory.get(iid, 0) + max(0, int(qty))
+
+    def has_item(self, name: str, qty: int = 1) -> bool:
+        """Check if the player has at least `qty` of the item."""
+        iid = canonical_item_id(name)
+        return self.inventory.get(iid, 0) >= max(1, int(qty))
+
+    def remove_item(self, name: str, qty: int = 1) -> bool:
+        """Consume items if available; return True if removed."""
+        iid = canonical_item_id(name)
+        need = max(1, int(qty))
+        have = self.inventory.get(iid, 0)
+        if have < need:
+            return False
+        newq = have - need
+        if newq > 0:
+            self.inventory[iid] = newq
+        else:
+            self.inventory.pop(iid, None)
+        return True
+
+    def pretty_inventory(self) -> str:
+        """Return a human-readable inventory string using display names."""
+        if not self.inventory:
+            return "(empty)"
+        parts = []
+        for iid, qty in self.inventory.items():
+            meta = ITEM_CATALOG.get(iid, {})
+            name = meta.get("display_name", iid.title())
+            parts.append(f"{qty}x {name}")
+        return ", ".join(parts)
+   
+
 @dataclass
 class NegotiationSession:
 
@@ -248,6 +306,8 @@ class NegotiationSession:
                     if not isinstance(eff_tags, list):
                         eff_tags = [eff_tags]
 
+                    eff_copy = resolve_event_ref(eff_copy)
+
                     # Normalize to lowercase and deduplicate while preserving order
                     q_tags = q.tags if isinstance(q.tags, list) else [q.tags]
                     merged = list(dict.fromkeys(
@@ -259,13 +319,10 @@ class NegotiationSession:
 
             print("Invalid choice. Try again.")
 
-    def process_event(self, event: EventPayload, decision: Optional[Dict[str, Any]]) -> None:
-        """
-        Apply consequences of a special event to session/player.
-        'decision' comes from the console layer (e.g., {"pay": True}, {"use_item": "leaf"}).
-        Clamps rapport and updates flags when needed.
-        """
+    def process_event(self, event: EventPayload, decision: Dict[str, Any] | None) -> None:
+        """Apply consequences of a special event to session/player."""
         et = str(event.get("type", "")).lower()
+        decision = decision or {}
 
         if et == "ask_gold":
             amount = int(event.get("amount", 0))
@@ -277,28 +334,33 @@ class NegotiationSession:
                     self.recruited = True
                     self.in_progress = False
             else:
-                # refused or not enough gold
                 self.rapport = max(RAPPORT_MIN, self.rapport - int(event.get("refuse_rapport", 0)))
                 if event.get("flee_on_refuse", False):
                     self.fled = True
                     self.in_progress = False
 
         elif et == "ask_item":
-            item = str(event.get("item", "")).lower()
+            iid = canonical_item_id(event.get("item", ""))
+            amount = int(event.get("amount", 1))
             consume = bool(event.get("consume", True))
             give = bool(decision.get("give", False))
-            has_it = self.player.inventory.get(item, 0) > 0
-            if give and has_it:
+
+            if iid not in ITEM_CATALOG:
+                print(f"[warn] Unknown item in event: '{iid}'. Treating as decline.")
+                give = False
+
+            if give and self.player.has_item(iid, amount):
                 if consume:
-                    self.player.inventory[item] -= 1
-                    if self.player.inventory[item] <= 0:
-                        del self.player.inventory[item]
+                    self.player.remove_item(iid, amount)
                 self.rapport = min(RAPPORT_MAX, self.rapport + int(event.get("give_rapport", 0)))
+                if event.get("join_on_give", False):
+                    self.recruited = True
+                    self.in_progress = False
             else:
                 self.rapport = max(RAPPORT_MIN, self.rapport - int(event.get("decline_rapport", 0)))
 
+
         elif et == "trap":
-            # No user decision required; apply penalty and maybe flee.
             pen = int(event.get("penalty_rapport", 0))
             self.rapport = max(RAPPORT_MIN, self.rapport - abs(pen))
             p = float(event.get("flee_chance", 0.0))
@@ -307,7 +369,6 @@ class NegotiationSession:
                 self.in_progress = False
 
         elif et == "whim":
-            # Whim is generated by maybe_trigger_whim(); we expect a decision schema similar to ask_gold/item
             kind = str(event.get("kind", "")).lower()
             if kind == "ask_gold":
                 amount = int(event.get("amount", 1))
@@ -436,6 +497,19 @@ class NegotiationSession:
 # Helpers
 # =========================
 
+def _weighted_choice(rng, entries: List[EventPayload]) -> Optional[EventPayload]:
+    total = sum(max(0, int(e.get("weight", 1))) for e in entries)
+    if total <= 0:
+        return None
+    pick = rng.uniform(0, total)
+    acc = 0.0
+    for e in entries:
+        w = max(0, int(e.get("weight", 1)))
+        acc += w
+        if pick <= acc:
+            return e
+    return None
+
 def _coerce_int(value: Any, default: int = 0) -> int:
     try:
         return int(value)
@@ -466,6 +540,61 @@ def _parse_personality(val: Any) -> Personality:
 
 def clamp(x: int, lo: int, hi: int) -> int:
     return lo if x < lo else hi if x > hi else x
+
+def canonical_item_id(name: str) -> str:
+    """Normalize any item name to a canonical ID (lowercase, stripped)."""
+    return str(name).strip().lower()
+
+def resolve_event_ref(effect: Effect) -> Effect:
+    """Return a copy of effect with an embedded 'event' if it had 'event_ref'."""
+    if not isinstance(effect, dict):
+        return effect
+    ref = effect.get("event_ref")
+    if not ref:
+        return effect
+    payload = EVENTS_REGISTRY.get(str(ref))
+    if not payload:
+        print(f"[warn] Unknown event_ref '{ref}'. Ignoring.")
+        return effect
+    eff = dict(effect)
+    eff["event"] = payload  # do NOT delete event_ref; harmless to keep or remove
+    return eff
+
+# =========================
+# Validation helpers
+# =========================
+
+def validate_questions_against_items(questions: List[Question]) -> None:
+    """
+    Scan all choices for ask_item events and ensure items exist in ITEM_CATALOG.
+    Raise ValueError on first mismatch (fail fast).
+    """
+    for q in questions:
+        for label, eff in q.choices.items():
+            evt = eff.get("event")
+            if isinstance(evt, dict) and str(evt.get("type", "")).lower() == "ask_item":
+                iid = canonical_item_id(evt.get("item", ""))
+                if iid not in ITEM_CATALOG:
+                    raise ValueError(
+                        f"Question '{q.id}' choice '{label}' references unknown item '{iid}'."
+                        " Add it to data/items.json or fix the name."
+                    )
+
+def validate_event_refs(questions: List[Question]) -> None:
+    for q in questions:
+        for label, eff in q.choices.items():
+            ref = eff.get("event_ref")
+            if ref and ref not in EVENTS_REGISTRY:
+                raise ValueError(f"Question '{q.id}' choice '{label}' references unknown event_ref '{ref}'.")
+
+def validate_events_against_items() -> None:
+    # ensure all ask_item in EVENTS_REGISTRY reference catalog items
+    for eid, ev in EVENTS_REGISTRY.items():
+        if ev.get("type") == "ask_item":
+            iid = canonical_item_id(ev.get("item", ""))
+            if iid not in ITEM_CATALOG:
+                raise ValueError(f"Event '{eid}' references unknown item '{iid}'.")
+
 
 # =========================
 # Loaders
@@ -694,8 +823,105 @@ def load_personality_weights(path: str = "data/personality_weights.json") -> Non
     total = sum(len(m) for m in weights.values())
     print(f"[weights] Loaded {total} tag weights across {len(weights)} personalities.")
 
+def load_item_catalog(path: str = "data/items.json") -> None:
+    """
+    Load item catalog from JSON into ITEM_CATALOG.
+    JSON schema (recommended): a single object mapping item_id -> ItemDef.
+    All keys are normalized to lowercase.
+    Defaults:
+      rarity="common", value=0, stackable=True, description=""
+      display_name = Title Case of the key if missing.
+    """
+    global ITEM_CATALOG
+
+    if not os.path.exists(path):
+        print(f"[items] {path} not found. Loaded empty catalog.")
+        ITEM_CATALOG = {}
+        return
+
+    with open(path, "r", encoding="utf-8") as f:
+        raw = json.load(f)
+
+    if not isinstance(raw, dict):
+        raise ValueError("items.json must be a JSON object mapping item_id -> item metadata.")
+
+    catalog: Dict[str, ItemDef] = {}
+    for raw_key, meta in raw.items():
+        key = canonical_item_id(raw_key)
+        if not isinstance(meta, dict):
+            raise ValueError(f"Item '{raw_key}' must have an object as value.")
+        display = str(meta.get("display_name") or raw_key.title())
+        rarity = str(meta.get("rarity") or "common").lower()
+        if rarity not in {"common", "uncommon", "rare", "epic", "legendary"}:
+            raise ValueError(f"Item '{raw_key}' has invalid rarity: {rarity}")
+        try:
+            value = int(meta.get("value", 0))
+        except (TypeError, ValueError):
+            value = 0
+        stackable = bool(meta.get("stackable", True))
+        desc = str(meta.get("description", ""))
+
+        catalog[key] = ItemDef(
+            display_name=display,
+            rarity=rarity,      # type: ignore[assignment]
+            value=value,
+            stackable=stackable,
+            description=desc,
+        )
+
+    ITEM_CATALOG = catalog
+    print(f"[items] Loaded {len(ITEM_CATALOG)} items.")
+
+def load_events(path: str = "data/events.json") -> None:
+    """Load event templates by id into EVENTS_REGISTRY."""
+    global EVENTS_REGISTRY
+    if not os.path.exists(path):
+        print(f"[events] {path} not found. Loaded empty registry.")
+        EVENTS_REGISTRY = {}
+        return
+    with open(path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    if not isinstance(data, dict):
+        raise ValueError("events.json must be an object mapping id -> event payload.")
+    # normalize a bit (clamp ranges later if needed)
+    EVENTS_REGISTRY = {str(k): v for k, v in data.items()}
+    print(f"[events] Loaded {len(EVENTS_REGISTRY)} events.")
+
+
+def load_whims(path: str = "data/whims.json") -> None:
+    """Load whim config and templates."""
+    global WHIMS_CONFIG, WHIM_TEMPLATES
+    if not os.path.exists(path):
+        print(f"[whims] {path} not found. Whims disabled.")
+        WHIMS_CONFIG, WHIM_TEMPLATES = {}, []
+        return
+    with open(path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    if not isinstance(data, dict):
+        raise ValueError("whims.json must be an object with base_chance, personality_mod, entries[].")
+    WHIMS_CONFIG = {
+        "base_chance": float(data.get("base_chance", 0.0)),
+        "personality_mod": {str(k).upper(): float(v) for k, v in data.get("personality_mod", {}).items()},
+    }
+    entries = data.get("entries", [])
+    if not isinstance(entries, list):
+        raise ValueError("whims.json 'entries' must be a list.")
+    # normalize ids and ensure required fields
+    norm_entries: List[EventPayload] = []
+    for e in entries:
+        if not isinstance(e, dict):
+            continue
+        e = dict(e)
+        e["type"] = str(e.get("type", "")).lower()  # ask_gold/ask_item
+        e["id"] = str(e.get("id", ""))
+        e["weight"] = int(e.get("weight", 1))
+        norm_entries.append(e)  # we keep validation light for now
+    WHIM_TEMPLATES = norm_entries
+    print(f"[whims] Loaded {len(WHIM_TEMPLATES)} whim templates.")
+
+
 # =========================
-#  Console-level Functions
+#  Console-layer Functions
 # =========================
 
 def show_menu(session) -> str:
@@ -722,31 +948,44 @@ def show_menu(session) -> str:
         print("OPCION NO VALIDA. Intenta de nuevo.")
 
 def maybe_trigger_whim(self) -> Optional[EventPayload]:
-    """
-    With a small probability, the demon requests something (a whim).
-    Probability can depend on personality and remaining patience.
-    Returns an event payload or None.
-    """
-    # Base chance (e.g., 10%), modulated by personality/patience
-    base = 0.10
-    if self.demon.personality is Personality.PLAYFUL:
-        base += 0.05
-    if self.turns_left <= max(1, self.demon.patience // 3):
-        base += 0.05  # gets needier near the end
-
-    if self.rng.random() >= base:
+    """Use WHIMS_CONFIG/WHIM_TEMPLATES to maybe emit a whim event."""
+    if not WHIM_TEMPLATES:
+        return None
+    base = float(WHIMS_CONFIG.get("base_chance", 0.0))
+    mod = WHIMS_CONFIG.get("personality_mod", {})
+    base += float(mod.get(self.demon.personality.name, 0.0))
+    if self.rng.random() >= max(0.0, min(1.0, base)):
         return None
 
-    # Simple whim: ask for 1–3 gold; rapport +/-1
-    amount = self.rng.randint(1, 3)
-    return EventPayload(
-        type="whim",
-        kind="ask_gold",        # custom field for whim subtype
-        amount=amount,
-        pay_rapport=1,
-        refuse_rapport=1,
-        message=f"{self.demon.name} caprichosamente te pide {amount} monedas."
-    )
+    # filter by conditions (e.g., only_if_has_item)
+    candidates: List[EventPayload] = []
+    for e in WHIM_TEMPLATES:
+        etype = e.get("type")
+        if etype == "ask_item" and e.get("only_if_has_item", False):
+            item = canonical_item_id(e.get("item", ""))
+            amt = int(e.get("amount", 1))
+            if not self.player.has_item(item, amt):
+                continue
+        candidates.append(e)
+
+    if not candidates:
+        return None
+
+    tmpl = _weighted_choice(self.rng, candidates)
+    if not tmpl:
+        return None
+
+    # Instantiate ranges (amount_range) into concrete values
+    inst = dict(tmpl)
+    if "amount_range" in inst and isinstance(inst["amount_range"], list) and len(inst["amount_range"]) == 2:
+        lo, hi = int(inst["amount_range"][0]), int(inst["amount_range"][1])
+        inst["amount"] = self.rng.randint(min(lo, hi), max(lo, hi))
+        inst.pop("amount_range", None)
+
+    # Mark as whim so your process_event path can treat it specially if desired
+    inst["type"] = inst.get("type", "whim")
+    inst["kind"] = inst.get("type")  # optional
+    return inst  # EventPayload
 
 def dispatch_action(session, option: str) -> None:
     """
@@ -929,30 +1168,151 @@ def summarize_session(session: NegotiationSession) -> None:
     print(f"Rounds played: {session.round_no - 1}")
     print(f"Roster: {', '.join(roster_names) if roster_names else '(empty)'}")
 
+    def run_special_event(session: NegotiationSession, event: EventPayload) -> Dict[str, Any]:
+    """
+    Console interaction for special events. Returns a decision dict.
+    """
+    et = str(event.get("type", "")).lower()
+    msg = event.get("message")
+    if msg:
+        print(f"\n[Evento] {msg}")
+
+    # --- Ask gold or whim(kind=ask_gold) ---
+    if et in ("ask_gold", "whim") and (event.get("kind") == "ask_gold" or et == "ask_gold"):
+        amount = int(event.get("amount", 0))
+        print(f"Te quedan {session.player.gold} monedas.")
+        while True:
+            ans = input(f"¿Pagar {amount} monedas? (s/n): ").strip().lower()
+            if ans in {"s", "n"}:
+                return {"pay": ans == "s"}
+
+    # --- Ask item (classic SMT flow) ---
+    if et == "ask_item":
+        raw_item = str(event.get("item", "")).strip()
+        amount = int(event.get("amount", 1))
+        iid = canonical_item_id(raw_item)
+        meta = ITEM_CATALOG.get(iid, {})
+        disp = meta.get("display_name", raw_item.title())
+        have = session.player.inventory.get(iid, 0)
+
+        print(f"{session.demon.name} quiere {amount}x {disp}. (Tienes: {have})")
+        if have < amount:
+            print("No tienes suficientes. (No puedes aceptar.)")
+            return {"give": False}
+
+        while True:
+            ans = input(f"¿Entregar {amount}x {disp}? (s/n): ").strip().lower()
+            if ans in {"s", "n"}:
+                return {"give": ans == "s"}
+
+    if et == "trap":
+        print("Notas tensión en el aire…")
+        return {}
+
+    return {}
+
 # =========================
 #  Main function
 # =========================
 
 
-def main():
+def main() -> None:
+    """Bootstrap the game, load all registries, and run one negotiation session."""
     print_banner()
-    
-    try:
-        load_config("config.json")  # sets RAPPORT_MIN/MAX, AXIS_MIN/MAX, TOL_MIN/MAX, RNG_SEED, etc.
-    except NameError:
-        # If load_config is not available yet, you can skip it during the first run.
-        pass
 
-    rng = random.Random(RNG_SEED) if RNG_SEED is not None else None
-    load_personality_weights("data/personality_weights.json")
+    # 1) Config: limits, UI delay, RNG seed (may print status)
+    try:
+        load_config("config.json")
+    except Exception as e:
+        # Fail-fast is fine; but you can opt to continue with defaults
+        print(f"[config] Error loading config.json: {e}. Using defaults.")
+
+    # 2) RNG: create a single Random to inject everywhere (deterministic if RNG_SEED is set)
+    rng = random.Random(RNG_SEED) if RNG_SEED is not None else random.Random()
+
+    # 3) Personality weights (optional: neutral if file missing)
+    try:
+        load_personality_weights("data/personality_weights.json")
+    except Exception as e:
+        print(f"[weights] Error: {e}. Personality bonuses disabled.")
+        # if you want, keep PERSONALITY_TAG_WEIGHTS = {} here
+
+    # 4) Items catalog (needed before validating events/questions that reference items)
+    try:
+        load_item_catalog("data/items.json")
+    except Exception as e:
+        print(f"[items] Error: {e}. Loading empty catalog.")
+        # ITEM_CATALOG will be {} (your loader already handles this case)
+
+    # 5) Event templates (events.json) and 6) Whims config (whims.json)
+    try:
+        load_events("data/events.json")
+    except Exception as e:
+        print(f"[events] Error: {e}. Events registry is empty.")
+
+    try:
+        load_whims("data/whims.json")
+    except Exception as e:
+        print(f"[whims] Error: {e}. Whims disabled.")
+
+    # 7) Questions (after events/items so we can validate references)
+    try:
+        questions_pool = load_questions("data/questions.json")
+    except FileNotFoundError:
+        # Fallback to singular name if you prefer it
+        questions_pool = load_questions("data/question.json")
+    except Exception as e:
+        raise RuntimeError(f"[questions] Failed to load questions: {e}") from e
+
+    # 8) Cross-validations (fail fast if data is inconsistent)
+    try:
+        validate_events_against_items()              # events ask_item → must exist in ITEM_CATALOG
+        validate_questions_against_items(questions_pool)  # choices with ask_item → must exist in ITEM_CATALOG
+        validate_event_refs(questions_pool)          # event_ref in questions → must exist in EVENTS_REGISTRY
+    except Exception as e:
+        raise RuntimeError(f"[validate] Data validation failed: {e}") from e
+
+    # 9) Demons (independent of the above; do it now)
+    try:
+        demons = load_demons("data/demons.json")
+    except Exception as e:
+        raise RuntimeError(f"[demons] Failed to load demons: {e}") from e
+
+    # 10) Build core objects (player/session)
     player = Player(core_alignment=Alignment(0, 0))
-    demons = load_demons("data/demons.json")
-    questions_pool = load_questions("data/questions.json")
+    # (Optional) seed some starting resources for testing
+    # player.gold = 10
+    # player.add_item("leaf of life", 2)
+    # player.add_item("odd morsel", 3)
+
+    # Difficulty input (validated and clamped inside the function)
     diff_level = read_difficulty()
-    current_demon = choose_demon(demons)
-    session = NegotiationSession(player=player, demon=current_demon, question_pool=questions_pool, rng=rng)
-    run_game_loop(session, diff_level)
-    summarize_session(session)
+
+    # Choose a demon using the same RNG (consistent with the session RNG)
+    current_demon = choose_demon(demons)  # If you added rng param: choose_demon(demons, rng=rng)
+
+    session = NegotiationSession(
+        player=player,
+        demon=current_demon,
+        question_pool=questions_pool,
+        rng=rng,  # ensures all randomness in-session uses the same source
+    )
+
+    # 11) Run loop with graceful keyboard interrupt handling
+    try:
+        run_game_loop(session, diff_level)
+    except (KeyboardInterrupt, EOFError):
+        print("\n[!] Interrupted by user. Ending negotiation softly…")
+        session.in_progress = False
+        session.fled = True
+    finally:
+        summarize_session(session)
+
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except (KeyboardInterrupt, EOFError):
+        # Covers interruptions before main builds the session
+        print("\nBye!")
+

@@ -1,0 +1,30 @@
+{
+  "leaf of life": {
+    "display_name": "Leaf of Life",
+    "rarity": "common",
+    "value": 5,
+    "stackable": true,
+    "description": "A fragrant green leaf said to heal minor wounds."
+  },
+  "odd morsel": {
+    "display_name": "Odd Morsel",
+    "rarity": "common",
+    "value": 2,
+    "stackable": true,
+    "description": "Strange food; demons might like it."
+  },
+  "holy water": {
+    "display_name": "Holy Water",
+    "rarity": "uncommon",
+    "value": 15,
+    "stackable": true,
+    "description": "Purified water that wards off darkness."
+  },
+  "rusted coin": {
+    "display_name": "Rusted Coin",
+    "rarity": "common",
+    "value": 1,
+    "stackable": true,
+    "description": "Old currency. Sometimes useful for bargains."
+  }
+}
