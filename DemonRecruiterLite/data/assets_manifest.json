@@ -1,27 +1,27 @@
 {
   "sources": {
-    "sjr": { "root": "assets/sjr/", "ext": "png" }
+    "sjr": { "root": "assets/sjr/portraits/", "ext": "png" }
   },
   "map": {
-    "pixie":        { "file": "pixie.png",        "portrait": "pixie_portrait.png" },
-    "goblin":       { "file": "goblin.png",       "portrait": "goblin_portrait.png" },
-    "jack_frost":   { "file": "jack_frost.png",   "portrait": "jack_frost_portrait.png" },
-    "pyro_jack":    { "file": "pyro_jack.png",    "portrait": "pyro_jack_portrait.png" },
-    "high_pixie":   { "file": "high_pixie.png",   "portrait": "high_pixie_portrait.png" },
-    "silky":        { "file": "silky.png",        "portrait": "silky_portrait.png" },
-    "nekomata":     { "file": "nekomata.png",     "portrait": "nekomata_portrait.png" },
-    "knocker":      { "file": "knocker.png",      "portrait": "knocker_portrait.png" },
-    "hua_po":       { "file": "hua_po.png",       "portrait": "hua_po_portrait.png" },
-    "naga":         { "file": "naga.png",         "portrait": "naga_portrait.png" },
-    "nozuchi":      { "file": "nozuchi.png",      "portrait": "nozuchi_portrait.png" },
-    "angel":        { "file": "angel.png",        "portrait": "angel_portrait.png" },
-    "archangel":    { "file": "archangel.png",    "portrait": "archangel_portrait.png" },
-    "principality": { "file": "principality.png", "portrait": "principality_portrait.png" },
-    "onmoraki":     { "file": "onmoraki.png",     "portrait": "onmoraki_portrait.png" },
-    "harpy":        { "file": "harpy.png",        "portrait": "harpy_portrait.png" },
-    "koppa_tengu":  { "file": "koppa_tengu.png",  "portrait": "koppa_tengu_portrait.png" },
-    "inugami":      { "file": "inugami.png",      "portrait": "inugami_portrait.png" },
-    "mandrake":     { "file": "mandrake.png",     "portrait": "mandrake_portrait.png" },
-    "cerberus":     { "file": "cerberus.png",     "portrait": "cerberus_portrait.png" }
+    "pixie":        { "portrait": "pixie.png" },
+    "goblin":       { "portrait": "goblin.png" },
+    "jack_frost":   { "portrait": "jack_frost.png" },
+    "pyro_jack":    { "portrait": "pyro_jack.png" },
+    "high_pixie":   { "portrait": "high_pixie.png" },
+    "silky":        { "portrait": "silky.png" },
+    "nekomata":     { "portrait": "nekomata.png" },
+    "knocker":      { "portrait": "knocker.png" },
+    "hua_po":       { "portrait": "hua_po.png" },
+    "naga":         { "portrait": "naga.png" },
+    "nozuchi":      { "portrait": "nozuchi.png" },
+    "angel":        { "portrait": "angel.png" },
+    "archangel":    { "portrait": "archangel.png" },
+    "principality": { "portrait": "principality.png" },
+    "onmoraki":     { "portrait": "onmoraki.png" },
+    "harpy":        { "portrait": "harpy.png" },
+    "koppa_tengu":  { "portrait": "koppa_tengu.png" },
+    "inugami":      { "portrait": "inugami.png" },
+    "mandrake":     { "portrait": "mandrake.png" },
+    "cerberus":     { "portrait": "cerberus.png" }
   }
 }

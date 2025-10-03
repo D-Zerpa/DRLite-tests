@@ -8,7 +8,10 @@ Description:
 from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Dict, List, Tuple, Optional, TypedDict, Set, Final, Any, Literal, NotRequired
+import textwrap
+from shutil import get_terminal_size
 from enum import Enum
+from datetime import datetime
 import os, json, tempfile
 import random
 import time
@@ -26,6 +29,7 @@ WHIMS_CONFIG: Dict[str, Any] = {}
 WHIM_TEMPLATES: List[EventPayload] = []
 PERSONALITY_CUES_BY_NAME: Dict[str, Dict[str, str]] = {}
 SAVE_PATH = "saves/slot1.json"
+ASSETS_MANIFEST: Dict[str, Any] = {}
 
 # =========================
 # OOP Models
@@ -57,7 +61,7 @@ class EventPayload(TypedDict, total=False):
     consume: NotRequired[bool]
     give_rapport: NotRequired[int]
     decline_rapport: NotRequired[int]
-    ammount_range: NotRequired[List[int]]
+    amount_range: NotRequired[List[int]]
     join_on_give: NotRequired[int]
 
     # trap:
@@ -121,6 +125,7 @@ class ReactionFeedback:
 @dataclass(eq= False, slots = True)
 class Demon:
 
+    id: str
     name: str
     alignment: Alignment
     personality: Personality
@@ -394,7 +399,7 @@ class NegotiationSession:
 
 
 
-    def process_answer(self, effect: Dict[str, int]) -> None:
+    def process_answer(self, effect: Dict[str, int]) -> ReactionFeedback:
         """
         Apply the chosen effect to stance and session metrics.
         - Update stance (dLC/dLD) and clamp.
@@ -436,7 +441,7 @@ class NegotiationSession:
 
         fb = ReactionFeedback(
             tone=tone,
-            cue=_flavor_cue(self.demon.personality, tone, default_emoji),
+            cue=flavor_cue(self.demon.personality, tone, default_emoji),
             delta_rapport=d_rep,
             delta_distance=delta_distance,
             liked_tags=liked,
@@ -675,9 +680,6 @@ def resolve_event_ref(effect: Effect) -> Effect:
     eff["event"] = payload  # do NOT delete event_ref; harmless to keep or remove
     return eff
 
-def _flavor_cue(personality: Personality, tone: str, default_emoji: str) -> str:
-    return PERSONALITY_CUES_BY_NAME.get(personality, {}).get(tone, default_emoji)
-
 def _split_tag_sentiment(personality: Personality, tags: List[str]) -> tuple[List[str], List[str]]:
     """Classify which tags were liked/disliked based on loaded weights (JSON)."""
     weights = PERSONALITY_TAG_WEIGHTS.get(personality, {})
@@ -732,6 +734,78 @@ def _tone_from_delta(delta_rapport: int) -> tuple[str, str]:
     if delta_rapport == 0:   return ("Neutral",   "😐")
     if delta_rapport == -1:  return ("Annoyed",   "🙁")
     return ("Enraged", "😠")  # delta <= -2
+
+def _canonical_demon_id(s: str) -> str:
+    import re
+    s = s.strip().lower()
+    s = re.sub(r"[^a-z0-9]+", "_", s)
+    return re.sub(r"_+", "_", s).strip("_")
+
+def _resolve_source_root(source_key: str) -> str:
+    src = ASSETS_MANIFEST.get("sources", {}).get(source_key)
+    if not src:
+        raise KeyError(f"Unknown sprite_source '{source_key}' in assets manifest.")
+    return src.get("root", "")
+
+def get_portrait_path(demon: "Demon", variant: str = "neutral") -> Optional[str]:
+    """
+    Return the absolute path to the demon's portrait file, or None if not found.
+    Supports two forms:
+      "portrait": "file.png"
+      "portrait": { "neutral": "file.png", "angry": "file2.png", ... }
+    """
+    sources = ASSETS_MANIFEST.get("sources", {})
+    amap = ASSETS_MANIFEST.get("map", {})
+    src_key = getattr(demon, "sprite_source", None) or "sjr"
+    key = getattr(demon, "sprite_key", None) or demon.id
+
+    entry = amap.get(key)
+    if not entry:
+        return None
+
+    p = entry.get("portrait")
+    if p is None:
+        return None
+
+    # string or dict
+    if isinstance(p, str):
+        filename = p
+    elif isinstance(p, dict):
+        filename = p.get(variant) or p.get("neutral")
+        if not filename:
+            # pick any available variant as fallback
+            filename = next(iter(p.values()), None)
+    else:
+        return None
+
+    if not filename:
+        return None
+
+    root = _resolve_source_root(src_key)
+    return os.path.join(root, filename)
+
+# Simple ANSI style helper
+def _style(text: str, code: str, enable: bool) -> str:
+    return f"\033[{code}m{text}\033[0m" if enable else text
+
+def _rarity_label(rarity_obj, color: bool) -> str:
+    # Works whether rarity is an Enum or a plain string
+    if isinstance(rarity_obj, Enum):
+        key = rarity_obj.value
+        raw = rarity_obj.value.upper()
+    else:
+        key = str(rarity_obj).lower()
+        raw = str(rarity_obj).upper()
+
+    # Color theme per rarity (feel free to tweak)
+    palette = {
+        "common":    "37",   # gray
+        "uncommon":  "32",   # green
+        "rare":      "34",   # blue
+        "epic":      "35",   # magenta
+        "legendary": "33",   # yellow
+    }
+    return _style(raw, palette.get(key, "37"), color)
 
 
 # =========================
@@ -875,28 +949,6 @@ def alignment_to_save(a: "Alignment") -> SaveAlignment:
 def alignment_from_save(d: SaveAlignment) -> "Alignment":
     return Alignment(law_chaos=int(d["lc"]), light_dark=int(d["ld"]))
 
-def save_game(path: str, player: "Player", demons: List["Demon"],
-              session: Optional["NegotiationSession"]) -> None:
-    data: SaveGame = {
-        "version": SAVE_VERSION,
-        "timestamp": datetime.utcnow().isoformat() + "Z",
-        "player": player_to_save(player),
-        "world": world_to_save(demons),
-        "session": session_to_save(session) if session and session.in_progress else None,
-        "demondex": dex_to_save(player),
-    }
-
-    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-    fd, tmp = tempfile.mkstemp(prefix=".tmp_save_", dir=os.path.dirname(path) or ".")
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-        os.replace(tmp, path)  # atomic on same filesystem
-        print(f"[save] Saved to {path}")
-    except Exception:
-        try: os.remove(tmp)
-        except OSError: pass
-        raise
 
 # =========================
 # Validation helpers
@@ -932,6 +984,29 @@ def validate_events_against_items() -> None:
             iid = canonical_item_id(ev.get("item", ""))
             if iid not in ITEM_CATALOG:
                 raise ValueError(f"Event '{eid}' references unknown item '{iid}'.")
+
+def validate_portraits(demons: list["Demon"], strict: bool = True) -> None:
+    """
+    Validate that every demon has a portrait entry and the file exists.
+    If strict=False, only warn for missing files; otherwise raise.
+    """
+    problems = []
+    for d in demons:
+        path = get_portrait_path(d)
+        if path is None:
+            problems.append(f"[{d.id}] portrait not mapped (source={getattr(d, 'sprite_source', 'sjr')}, key={getattr(d, 'sprite_key', d.id)})")
+        else:
+            if not os.path.exists(path):
+                problems.append(f"[{d.id}] portrait file missing: {path}")
+
+    if problems:
+        msg = "\n".join(problems[:12])
+        if strict:
+            raise RuntimeError(f"[assets] Portrait validation failed ({len(problems)} issues):\n{msg}")
+        else:
+            print(f"[assets] Portrait validation warnings ({len(problems)}):\n{msg}")
+    else:
+        print(f"[assets] Portraits validated for {len(demons)} demons.")
 
 
 # =========================
@@ -1025,6 +1100,7 @@ def load_demons(path: str) -> List[Demon]:
     for i, item in enumerate(raw, start=1):
         try:
             name = str(item["name"])
+            did = str(item.get("id") or _canonical_demon_id(name))
             al = item.get("alignment", {})
             lc = _coerce_int(al.get("law_chaos", 0))
             ld = _coerce_int(al.get("light_dark", 0))
@@ -1037,6 +1113,7 @@ def load_demons(path: str) -> List[Demon]:
 
             demons.append(
                 Demon(
+                    id=did,
                     name=name,
                     alignment=align,
                     personality=personality,
@@ -1288,6 +1365,26 @@ def load_personality_cues(path: str = "data/personality_cues.json") -> None:
     total = sum(len(v) for v in table.values())
     print(f"[cues] Loaded {total} cues across {len(table)} personalities.")
 
+def load_assets_manifest(path: str = "assets_manifest.json") -> None:
+    """
+    Load the portraits-only manifest into ASSETS_MANIFEST.
+    Schema:
+      {
+        "sources": { "sjr": { "root": "assets/sjr/portraits/", "ext": "png" } },
+        "map": { "pixie": { "portrait": "pixie.png" } }
+      }
+    """
+    global ASSETS_MANIFEST
+    if not os.path.exists(path):
+        print(f"[assets] {path} not found. Portraits will be unavailable.")
+        ASSETS_MANIFEST = {"sources": {}, "map": {}}
+        return
+    with open(path, "r", encoding="utf-8") as f:
+        ASSETS_MANIFEST = json.load(f)
+    if "sources" not in ASSETS_MANIFEST or "map" not in ASSETS_MANIFEST:
+        raise ValueError("assets_manifest.json must contain 'sources' and 'map' keys.")
+    print(f"[assets] Manifest loaded with {len(ASSETS_MANIFEST.get('map', {}))} entries.")
+
 # =========================
 #  Console-layer Functions
 # =========================
@@ -1337,7 +1434,7 @@ def dispatch_action(session, option: str, demons_catalog: list[Demon]) -> None:
 
     elif option == "2":
         # Simple rapport mini-game: guess a number 0..2
-        secret = random.randint(0, 2)
+        secret = session.rng.randint(0, 2)
 
         while True:
             raw = input("Adivina un número (0-2): ").strip()
@@ -1385,15 +1482,63 @@ def read_difficulty() -> int:
             return max(1, min(5, lvl))
         print("Entrada inválida. Intenta con un número entre 1 y 5.")
 
-def choose_demon(demons: list[Demon]) -> Demon:
-    available = [d for d in demons if getattr(d, "available", True)]
-    if not available:
-        # Fallback: if all are taken, reuse the full list
-        available = demons[:]
-    return random.choice(available)
+def choose_demon(demons: list[Demon], rng: Optional[random.Random] = None) -> Demon:
+    r = rng or random
+    available = [d for d in demons if getattr(d, "available", True)] or demons[:]
+    return r.choice(available)
 
+def print_dex_card(d: "Demon", show_portrait: bool = True, color: bool = True) -> None:
+    # Header fields (robust against missing attrs)
+    dex_no = getattr(d, "dex_no", None)
+    rarity = getattr(d, "rarity", "COMMON")
+    rarity_txt = _rarity_label(rarity, color)
+    perso = getattr(d, "personality", None)
+    perso_txt = perso.name if isinstance(perso, Enum) else str(perso)
 
-def run_game_loop(session: NegotiationSession, diff_level: int) -> None:
+    lc = d.alignment.law_chaos
+    ld = d.alignment.light_dark
+
+    # Resolve portrait path (may be None)
+    portrait_path = None
+    if show_portrait:
+        try:
+            from assets_manifest import get_portrait_path  # adjust import to your layout
+            portrait_path = get_portrait_path(d)
+        except Exception:
+            portrait_path = None
+
+    # Layout
+    width = max(60, min(90, get_terminal_size((80, 20)).columns))
+    hr = "─" * (width - 2)
+
+    title_left = f"{d.name}"
+    title_right = f"#{dex_no}" if isinstance(dex_no, int) else ""
+    title = title_left if not title_right else f"{title_left}  {title_right}"
+
+    # Wrap description
+    desc = getattr(d, "description", "") or ""
+    wrapped_desc = textwrap.wrap(desc, width=width - 4) if desc else []
+
+    # Print card
+    print(f"╭{hr}╮")
+    print("│ " + _style(title, "1", color).ljust(width - 3) + "│")  # bold name
+    print("│ " + f"Rarity: {rarity_txt}".ljust(width - 3) + "│")
+    print("│ " + f"Personality: {perso_txt}".ljust(width - 3) + "│")
+    print("│ " + f"Alignment (LC/LD): ({lc}, {ld})".ljust(width - 3) + "│")
+    stats_line = f"Patience: {d.patience}  |  Tolerance: {d.tolerance}  |  Rapport needed: {d.rapport_needed}"
+    print("│ " + stats_line.ljust(width - 3) + "│")
+
+    if portrait_path:
+        print("│ " + f"Portrait: {portrait_path}".ljust(width - 3) + "│")
+
+    if wrapped_desc:
+        print("│ " + "Description:".ljust(width - 3) + "│")
+        for line in wrapped_desc:
+            print("│ " + line.ljust(width - 3) + "│")
+
+    print(f"╰{hr}╯")
+
+def run_game_loop(session: NegotiationSession, diff_level: int, demons_catalog: list[Demon]) -> None:
     """
     Core loop: show status, run menu, apply actions, check join/leave,
     apply difficulty pressure, and advance rounds until the session ends.
@@ -1523,14 +1668,14 @@ def bootstrap_session(demons_catalog:list["Demon"], questions_pool: list["Questi
             if sess:
                 return sess
             # if no active session in save, start a new negotiation
-            current_demon = choose_demon(demons_catalog)  # (optionally bias to available-only)
+            current_demon = choose_demon(demons_catalog, rng)  # (optionally bias to available-only)
             return NegotiationSession(player=player, demon=current_demon, question_pool=questions_pool, rng=rng)
 
     # New game
     player = Player(core_alignment=Alignment(0, 0))
     player.gold = 0
     player.inventory = {}
-    current_demon = choose_demon(demons_catalog)
+    current_demon = choose_demon(demons_catalog, rng)
     return NegotiationSession(player=player, demon=current_demon, question_pool=questions_pool, rng=rng)
 
 # =========================
@@ -1542,22 +1687,21 @@ def main() -> None:
     """Bootstrap the game, load all registries, and run one negotiation session."""
     print_banner()
 
-    # 1) Config: limits, UI delay, RNG seed (may print status)
+    # Config: limits, UI delay, RNG seed (may print status)
     try:
         load_config("config.json")
     except Exception as e:
         # Fail-fast is fine; but you can opt to continue with defaults
         print(f"[config] Error loading config.json: {e}. Using defaults.")
 
-    # 2) RNG: create a single Random to inject everywhere (deterministic if RNG_SEED is set)
+    # RNG: create a single Random to inject everywhere (deterministic if RNG_SEED is set)
     rng = random.Random(RNG_SEED) if RNG_SEED is not None else random.Random()
 
-    # 3) Personality weights (optional: neutral if file missing)
+    # Personality weights/cues (optional: neutral if file missing)
     try:
         load_personality_weights("data/personality_weights.json")
     except Exception as e:
         print(f"[weights] Error: {e}. Personality bonuses disabled.")
-        # if you want, keep PERSONALITY_TAG_WEIGHTS = {} here
 
     try:
         load_personality_cues("data/personality_cues.json")
@@ -1565,14 +1709,14 @@ def main() -> None:
         print(f"[weights] Error: {e}. Personality bonuses disabled.")
 
 
-    # 4) Items catalog (needed before validating events/questions that reference items)
+    # Items catalog (needed before validating events/questions that reference items)
     try:
         load_item_catalog("data/items.json")
     except Exception as e:
         print(f"[items] Error: {e}. Loading empty catalog.")
         # ITEM_CATALOG will be {} (your loader already handles this case)
 
-    # 5) Event templates (events.json) and 6) Whims config (whims.json)
+    # Event templates (events.json) and 6) Whims config (whims.json)
     try:
         load_events("data/events.json")
     except Exception as e:
@@ -1583,40 +1727,40 @@ def main() -> None:
     except Exception as e:
         print(f"[whims] Error: {e}. Whims disabled.")
 
-    # 7) Questions (after events/items so we can validate references)
+    # Questions (after events/items so we can validate references)
     try:
         questions_pool = load_questions("data/questions.json")
-    except FileNotFoundError:
-        # Fallback to singular name if you prefer it
-        questions_pool = load_questions("data/question.json")
     except Exception as e:
         raise RuntimeError(f"[questions] Failed to load questions: {e}") from e
 
-    # 8) Cross-validations (fail fast if data is inconsistent)
+    # Cross-validations (fail fast if data is inconsistent)
     try:
         validate_events_against_items()              # events ask_item → must exist in ITEM_CATALOG
         validate_questions_against_items(questions_pool)  # choices with ask_item → must exist in ITEM_CATALOG
         validate_event_refs(questions_pool)          # event_ref in questions → must exist in EVENTS_REGISTRY
+        validate_portraits(demons_catalog, strict=True)
     except Exception as e:
         raise RuntimeError(f"[validate] Data validation failed: {e}") from e
 
-    # 9) Demons (independent of the above; do it now)
+    # Demons
     try:
         demons_catalog = load_demons("data/demons.json")
     except Exception as e:
         raise RuntimeError(f"[demons] Failed to load demons: {e}") from e
 
+    try:
+        load_assets_manifest("assets_manifest.json")
+    except Exception as e:
+        raise RuntimeError(f"[demons] Failed to load assets: {e}") from e
+
     # Difficulty input (validated and clamped inside the function)
     diff_level = read_difficulty()
 
-    # Choose a demon using the same RNG (consistent with the session RNG)
-    current_demon = choose_demon(demons_catalog)  # If you added rng param: choose_demon(demons, rng=rng)
-
     session = bootstrap_session(demons_catalog, questions_pool, rng)
 
-    # 11) Run loop with graceful keyboard interrupt handling
+    # Run loop with graceful keyboard interrupt handling
     try:
-        run_game_loop(session, diff_level)
+        run_game_loop(session, diff_level, demons_catalog)
     except (KeyboardInterrupt, EOFError):
         print("\n[!] Interrupted by user. Ending negotiation softly…")
         session.in_progress = False
