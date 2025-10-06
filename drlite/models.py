@@ -164,6 +164,22 @@ class Player:
         """Return current quantity for item_id."""
         return self.inventory.get(item_id, 0)
 
+@dataclass
+class EventResult:
+    applied: bool
+    message: str = ""
+    delta_rapport: int = 0
+    consumed_gold: int = 0
+    consumed_items: Dict[str, int] = field(default_factory=dict)
+    join_now: bool = False      # e.g., pay-to-join
+    fled_now: bool = False      # e.g., trap caused flee
+
+@dataclass
+class WhimResult:
+    triggered: bool
+    message: str = ""
+    delta_rapport: int = 0
+    delta_turns: int = 0
 
 
 """
