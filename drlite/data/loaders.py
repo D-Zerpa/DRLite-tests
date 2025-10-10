@@ -295,3 +295,18 @@ def load_personality_cues(path: str = "data/personality_cues.json") -> None:
     PERSONALITY_CUES_BY_NAME = table
     total = sum(len(v) for v in table.values())
     print(f"[cues] Loaded {total} cues across {len(table)} personalities.")
+
+def _parse_personality(val: Any) -> Personality:
+    """Normalize personality from JSON (string or enum-like) to Personality enum."""
+    if isinstance(val, Personality):
+        return val
+    if isinstance(val, str):
+        key = val.strip().upper()
+        try:
+            return Personality[key]
+        except KeyError:
+            # Accept values already equal to enum.value
+            for p in Personality:
+                if p.value.upper() == key:
+                    return p
+    raise ValueError(f"Invalid personality value: {val!r}")

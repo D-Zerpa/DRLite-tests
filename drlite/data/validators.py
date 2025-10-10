@@ -1,5 +1,7 @@
 from __future__ import annotations
 from typing import List
+from drlite.data.loaders import ITEM_CATALOG, EVENTS_REGISTRY
+from drlite.data.types import Effect
 from drlite.models import Question, Demon
 
 
@@ -18,6 +20,15 @@ def validate_questions_against_items(questions: List[Question]) -> None:
                         f"Question '{q.id}' choice '{label}' references unknown item '{iid}'."
                         " Add it to data/items.json or fix the name."
                     )
+
+def validate_events_against_items() -> None:
+    for eid, ev in EVENTS_REGISTRY.items():
+        if ev.get("type") == "ask_item":
+            iid = str(ev.get("item","")).strip().lower().replace(" ","_")
+            if iid not in ITEM_CATALOG:
+                raise ValueError(f"Event '{eid}' references unknown item '{iid}'.")
+
+
 
 def validate_event_refs(questions: List[Question]) -> None:
     for q in questions:

@@ -1,11 +1,11 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import List, Dict, Set, Optional
+from typing import List, Dict, Set, Optional, Any
 import random
 
 from drlite.config import RAPPORT_MIN, RAPPORT_MAX, ROUND_DELAY_SEC
-from drlite.models import Player, Demon, Question, ReactionFeedback
-from drlite.utils import weighted_choice
+from drlite.models import Player, Demon, Question, ReactionFeedback, EventResult, WhimResult
+from drlite.utils import weighted_choice, tone_from_delta, flavor_cue, ensure_list_of_str
 
 
 @dataclass
@@ -98,120 +98,178 @@ class NegotiationSession:
 
             print("Invalid choice. Try again.")
 
-    def process_event(self, event: EventPayload, decision: Dict[str, Any] | None) -> None:
-        """Apply consequences of a special event to session/player."""
-        et = str(event.get("type", "")).lower()
-        decision = decision or {}
+    def process_event(
+    self,
+    payload: Mapping[str, Any],
+    *,
+    ask_yes_no: Callable[[str], bool],
+    ask_pay: Callable[[int, int], bool],
+    ask_give_item: Callable[[str, int, int], bool],
+    items_catalog: Optional[Mapping[str, dict]] = None,
+    ) -> EventResult:
+    """
+    Apply a special event embedded in a choice. Pure logic:
+    - Uses UI hooks to ask the user (no prints here).
+    - Mutates session/player state (gold, inventory, rapport) as needed.
+    - Returns EventResult so UI can display a coherent message.
 
-        if et == "ask_gold":
-            amount = int(event.get("amount", 0))
-            pay = bool(decision.get("pay", False))
-            if pay and self.player.gold >= amount:
-                self.player.gold -= amount
-                self.rapport = min(RAPPORT_MAX, self.rapport + int(event.get("pay_rapport", 0)))
-                if event.get("join_on_pay", False):
-                    self.recruited = True
-                    self.in_progress = False
-            else:
-                self.rapport = max(RAPPORT_MIN, self.rapport - int(event.get("refuse_rapport", 0)))
-                if event.get("flee_on_refuse", False):
-                    self.fled = True
-                    self.in_progress = False
+    Supported payload examples:
+      {"type":"ask_gold", "amount":5, "pay_rapport":2, "refuse_rapport":-1,
+       "join_on_pay":false, "flee_on_refuse":false, "message":"..."}
+      {"type":"ask_item", "item":"leaf_of_life", "amount":1, "consume":true,
+       "give_rapport":2, "decline_rapport":0, "join_on_give":false, "message":"..."}
+      {"type":"trap", "penalty_rapport":2, "flee_chance":0.25, "message":"..."}
+    """
+    # stub minimal: wire the structure, fill later with your current logic
+    etype = str(payload.get("type", "")).lower()
 
-        elif et == "ask_item":
-            iid = canonical_item_id(event.get("item", ""))
-            amount = int(event.get("amount", 1))
-            consume = bool(event.get("consume", True))
-            give = bool(decision.get("give", False))
-
-            if iid not in ITEM_CATALOG:
-                print(f"[warn] Unknown item in event: '{iid}'. Treating as decline.")
-                give = False
-
-            if give and self.player.has_item(iid, amount):
-                if consume:
-                    self.player.remove_item(iid, amount)
-                self.rapport = min(RAPPORT_MAX, self.rapport + int(event.get("give_rapport", 0)))
-                if event.get("join_on_give", False):
-                    self.recruited = True
-                    self.in_progress = False
-            else:
-                self.rapport = max(RAPPORT_MIN, self.rapport - int(event.get("decline_rapport", 0)))
-
-
-        elif et == "trap":
-            pen = int(event.get("penalty_rapport", 0))
-            self.rapport = max(RAPPORT_MIN, self.rapport - abs(pen))
-            p = float(event.get("flee_chance", 0.0))
-            if self.rng.random() < p:
-                self.fled = True
+    if etype == "ask_gold":
+        amount = int(payload.get("amount", 0))
+        if amount <= 0:
+            return EventResult(applied=False, message="No gold requested.")
+        can = self.player.gold >= amount
+        ok = ask_pay(amount, self.player.gold) if can else False
+        if ok:
+            self.player.gold -= amount
+            dr = int(payload.get("pay_rapport", 0))
+            self.rapport = max(self.rapport + dr, self.rapport)  # clamp later if needed
+            return EventResult(applied=True, message="Gold paid.", delta_rapport=dr, consumed_gold=amount,
+                               join_now=bool(payload.get("join_on_pay", False)))
+        else:
+            dr = int(payload.get("refuse_rapport", 0))
+            self.rapport += dr
+            fled = bool(payload.get("flee_on_refuse", False))
+            if fled:
                 self.in_progress = False
+                self.fled = True
+            return EventResult(applied=True, message="Refused to pay.", delta_rapport=dr, fled_now=fled)
 
-        elif et == "whim":
-            kind = str(event.get("kind", "")).lower()
-            if kind == "ask_gold":
-                amount = int(event.get("amount", 1))
-                pay = bool(decision.get("pay", False))
-                if pay and self.player.gold >= amount:
-                    self.player.gold -= amount
-                    self.rapport = min(RAPPORT_MAX, self.rapport + int(event.get("pay_rapport", 1)))
-                else:
-                    self.rapport = max(RAPPORT_MIN, self.rapport - int(event.get("refuse_rapport", 1)))
+    if etype == "ask_item":
+        item_id = str(payload.get("item", ""))
+        amt = int(payload.get("amount", 1))
+        consume = bool(payload.get("consume", True))
+        have = self.player.count_item(item_id)
+        ok = have >= amt and ask_give_item(item_id, amt, have)
+        if ok:
+            if consume:
+                self.player.remove_item(item_id, amt)
+            dr = int(payload.get("give_rapport", 0))
+            self.rapport += dr
+            return EventResult(applied=True, message="Item given.", delta_rapport=dr,
+                               consumed_items={item_id: amt},
+                               join_now=bool(payload.get("join_on_give", False)))
+        else:
+            dr = int(payload.get("decline_rapport", 0))
+            self.rapport += dr
+            return EventResult(applied=True, message="Did not give the item.", delta_rapport=dr)
+
+    if etype == "trap":
+        dr = -abs(int(payload.get("penalty_rapport", 1)))
+        self.rapport += dr
+        # flee chance
+        import random as _r
+        fled = _r.random() < float(payload.get("flee_chance", 0.0))
+        if fled:
+            self.in_progress = False
+            self.fled = True
+        return EventResult(applied=True, message="It was a trap.", delta_rapport=dr, fled_now=fled)
+
+    # Unknown event type
+    return EventResult(applied=False, message="No event applied.")
+
 
 
 
     def process_answer(self, effect: Dict[str, int]) -> ReactionFeedback:
         """
-        Apply the chosen effect to stance and session metrics.
-        - Update stance (dLC/dLD) and clamp.
-        - Ask demon to react (get delta_rapport).
-        - Clamp rapport.
-        - Decrement turns and relax player's posture.
-        - Print a compact summary.
+        Apply the chosen effect to stance and session state, then build a ReactionFeedback
+        object for the UI layer. Pure logic: no prints, no input().
+
+        Steps:
+        1) Read deltas (dLC, dLD) and apply to stance; clamp.
+        2) Ask demon to react -> dRapport; clamp rapport.
+        3) Advance turn and relax player's posture toward core.
+        4) Compute Manhattan distance delta (negative => closer).
+        5) Derive tone and personality cue (using registries if available).
+        6) Derive liked/disliked tags from personality weights (best-effort).
+
+        Returns:
+        ReactionFeedback dataclass.
         """
-        # Pre-state
+        # --- Pre-state ---
         stance = self.player.stance_alignment
-        dist_before = stance.manhattan_distance(self.demon.alignment)
+        demon_align = self.demon.alignment
+        dist_before = stance.manhattan_distance(demon_align)
         rapport_before = self.rapport
 
-        # 1) Apply stance deltas
+        # --- 1) Stance deltas ---
         d_lc = int(effect.get("dLC", 0))
         d_ld = int(effect.get("dLD", 0))
         stance.law_chaos += d_lc
         stance.light_dark += d_ld
         stance.clamp()
 
-        # 2) Demon reaction → rapport delta (Phase B uses personality weights)
+        # --- 2) Demon reaction -> rapport delta (personality may influence inside .react) ---
         d_rep, _ = self.demon.react(effect)
-        self.rapport = max(RAPPORT_MIN, min(RAPPORT_MAX, self.rapport + d_rep))
+        self.rapport = max(RAPPORT_MIN, min(RAPPORT_MAX, self.rapport + int(d_rep)))
 
-        # 3) Advance turn and relax posture
+        # --- 3) Advance turn & relax posture ---
         self.turns_left -= 1
         self.player.relax_posture()
 
-        # 4) Compute distance change AFTER relaxation (more informative)
-        dist_after = stance.manhattan_distance(self.demon.alignment)
+        # --- 4) Distance delta (after relaxation is more informative for the player) ---
+        dist_after = stance.manhattan_distance(demon_align)
         delta_distance = dist_after - dist_before  # negative means closer
 
-        # 5) Build feedback
-        tone, default_emoji = _tone_from_delta(d_rep)
-        tags = effect.get("tags", []) if isinstance(effect, dict) else getattr(effect, "tags", [])
-        if not isinstance(tags, list): tags = [tags]
-        tags = [str(t).lower() for t in tags]
-        liked, disliked = _split_tag_sentiment(self.demon.personality, tags)
+        # --- 5) Tone & cue ---
+        tone = tone_from_delta(int(d_rep))
+        # try to use loaded cues; fall back to simple ellipsis
+        try:
+            # your loader should expose a dict like: {"PLAYFUL": {"Pleased": "...", ...}, ...}
+            from drlite.data.loaders import PERSONALITY_CUES  # type: ignore
+            cue = flavor_cue(self.demon.personality, tone, PERSONALITY_CUES, default="…")
+        except Exception:
+            cue = "…"
+
+        # --- 6) Tag sentiment (liked/disliked) using personality weights, best-effort ---
+        raw_tags = effect.get("tags", [])
+        tags = ensure_list_of_str(raw_tags)
+        tags = [t.lower() for t in tags]
+
+        liked: list[str] = []
+        disliked: list[str] = []
+        try:
+            # weights example: {"PLAYFUL": {"mercy": +1.0, "order": -0.5, ...}, ...}
+            from drlite.data.loaders import PERSONALITY_WEIGHTS  # type: ignore
+            pkey = getattr(self.demon.personality, "name", str(self.demon.personality))
+            weights = PERSONALITY_WEIGHTS.get(str(pkey), {})
+            for t in tags:
+                w = float(weights.get(t, 0.0))
+                if w > 0:
+                    liked.append(t)
+                elif w < 0:
+                    disliked.append(t)
+        except Exception:
+            # no weights loaded; leave both empty
+            pass
+
+        # --- 7) Build feedback object (notes are optional/debug-friendly) ---
+        notes = [
+            f"Δ Stance: LC {d_lc:+}, LD {d_ld:+}",
+            f"Rapport: {rapport_before} → {self.rapport}",
+            f"Distance: {dist_before} → {dist_after} ({delta_distance:+})",
+        ]
 
         fb = ReactionFeedback(
             tone=tone,
-            cue=flavor_cue(self.demon.personality, tone, default_emoji),
-            delta_rapport=d_rep,
-            delta_distance=delta_distance,
+            cue=cue,
+            delta_rapport=int(d_rep),
+            delta_distance=int(delta_distance),
             liked_tags=liked,
             disliked_tags=disliked,
-            notes=[f"Δ Stance: LC {d_lc:+}, LD {d_ld:+}",
-                f"Rapport: {rapport_before} → {self.rapport}",
-                f"Distance: {dist_before} → {dist_after} ({delta_distance:+})"]
+            notes=notes,
         )
-        self.last_feedback = fb
+        self.last_feedback = fb  # optional: keep for UI to query
         return fb
 
 
@@ -281,58 +339,44 @@ class NegotiationSession:
             self.in_progress = False
 
     def finish_union(self) -> None:
-        """If recruited, add demon to the roster, mark it unavailable, and notify."""
+        """
+        If recruited, add demon to roster and mark unavailable.
+        No printing here; UI layer reports outcome.
+        """
         if self.recruited:
             if self.demon not in self.player.roster:
                 self.player.roster.append(self.demon)
-            # Match your field name; if you used 'available' in Demon, set that.
             if hasattr(self.demon, "available"):
                 self.demon.available = False
-            print(f"{self.demon.name} has joined your roster!")
 
-    def maybe_trigger_whim(self) -> Optional[EventPayload]:
-        """Use WHIMS_CONFIG/WHIM_TEMPLATES to maybe emit a whim event."""
-        if not WHIM_TEMPLATES:
+    def maybe_trigger_whim(
+        self,
+        whims: Optional[list[dict]] = None,
+    ) -> Optional[WhimResult]:
+        """
+        Roll and optionally apply a demon 'whim' (caprice). Pure logic, no prints.
+        Example whim entry (JSON):
+        {"id":"w_tease", "chance":0.15, "delta_rapport":-1, "message":"teases you."}
+        """
+        if not whims:
             return None
-        base = float(WHIMS_CONFIG.get("base_chance", 0.0))
-        mod = WHIMS_CONFIG.get("personality_mod", {})
-        base += float(mod.get(self.demon.personality.name, 0.0))
-        if self.rng.random() >= max(0.0, min(1.0, base)):
-            return None
-
-        # filter by conditions (e.g., only_if_has_item)
-        candidates: List[EventPayload] = []
-        for e in WHIM_TEMPLATES:
-            etype = e.get("type")
-            if etype == "ask_item" and e.get("only_if_has_item", False):
-                item = canonical_item_id(e.get("item", ""))
-                amt = int(e.get("amount", 1))
-                if not self.player.has_item(item, amt):
-                    continue
-            candidates.append(e)
-
-        if not candidates:
-            return None
-
-        tmpl = _weighted_choice(self.rng, candidates)
-        if not tmpl:
-            return None
-
-        # Instantiate ranges (amount_range) into concrete values
-        inst = dict(tmpl)
-        if "amount_range" in inst and isinstance(inst["amount_range"], list) and len(inst["amount_range"]) == 2:
-            lo, hi = int(inst["amount_range"][0]), int(inst["amount_range"][1])
-            inst["amount"] = self.rng.randint(min(lo, hi), max(lo, hi))
-            inst.pop("amount_range", None)
-
-        # Mark as whim so your process_event path can treat it specially if desired
-        inst["type"] = inst.get("type", "whim")
-        inst["kind"] = inst.get("type")  # optional
-        return inst  # EventPayload 
+        r = self.rng or random
+        # simple pick: try each whim by chance
+        for w in whims:
+            chance = float(w.get("chance", 0.0))
+            if chance > 0 and r.random() < chance:
+                dr = int(w.get("delta_rapport", 0))
+                dt = int(w.get("delta_turns", 0))
+                self.rapport += dr
+                self.turns_left += dt
+                return WhimResult(triggered=True, message=str(w.get("message","")), delta_rapport=dr, delta_turns=dt)
+        return None
 
     def finish_fled(self) -> None:
-            """If fled, notify."""
-            if self.fled:
-                print(f"The negotiation with {self.demon.name} ended. The demon walked away.")
+        """
+        If fled, finalize session flags (pure state).
+        """
+        if self.fled:
+            self.in_progress = False
 
 

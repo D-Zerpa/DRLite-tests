@@ -36,55 +36,6 @@ ASSETS_MANIFEST: Dict[str, Any] = {}
 # =========================
 
 
-
-class EventPayload(TypedDict, total=False):
-    type: Literal["ask_gold", "ask_item", "trap", "whim"]
-    # Common:
-    message: NotRequired[str]
-
-    # ask_gold:
-    amount: NotRequired[int]
-    pay_rapport: NotRequired[int]
-    refuse_rapport: NotRequired[int]
-    flee_on_refuse: NotRequired[bool]
-    join_on_pay: NotRequired[bool]
-
-    # ask_item:
-    item: NotRequired[str]
-    amount: NotRequired[int]
-    consume: NotRequired[bool]
-    give_rapport: NotRequired[int]
-    decline_rapport: NotRequired[int]
-    amount_range: NotRequired[List[int]]
-    join_on_give: NotRequired[int]
-
-    # trap:
-    penalty_rapport: NotRequired[int]
-    flee_chance: NotRequired[float]
-
-    # whims:
-    kind: NotRequired[str]
-    only_if_has_item: NotRequired[bool]
-    weight: NotRequired[int]
-
-class Effect(TypedDict, total=False):
-    dLC: int
-    dLD: int
-    dRapport: int
-    tags: List[str]
-    event: EventPayload
-    event_ref: str
-
-class ItemDef(TypedDict, total=False):
-    display_name: str
-    rarity: Literal["common", "uncommon", "rare", "epic", "legendary"]
-    value: int
-    stackable: bool
-    description: str
-
-
-
-
 # =========================
 # OOP Models (Save state)
 # =========================
