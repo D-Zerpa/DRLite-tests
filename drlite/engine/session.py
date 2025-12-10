@@ -5,7 +5,7 @@ import random
 
 from drlite.config import RAPPORT_MIN, RAPPORT_MAX, ROUND_DELAY_SEC
 from drlite.models import Player, Demon, Question, ReactionFeedback, EventResult, WhimResult
-from drlite.utils import weighted_choice, tone_from_delta, flavor_cue, ensure_list_of_str
+from drlite.utils import weighted_choice, tone_from_delta, flavor_cue, ensure_list_of_str, resolve_event_ref
 
 
 @dataclass
@@ -58,7 +58,7 @@ class NegotiationSession:
         self._used_question_ids.add(q.id)
         return q
 
-    def ask(self) -> Effect:
+    def ask(self, events_registry: Dict[str, Any]) -> Effect:
         """
         Show a question, collect a valid choice, and return the chosen option's effect.
         Merges question-level tags into the effect so Demon.react() can consider both.
@@ -85,7 +85,7 @@ class NegotiationSession:
                     if not isinstance(eff_tags, list):
                         eff_tags = [eff_tags]
 
-                    eff_copy = resolve_event_ref(eff_copy)
+                    eff_copy = resolve_event_ref(eff_copy, events_registry)
 
                     # Normalize to lowercase and deduplicate while preserving order
                     q_tags = q.tags if isinstance(q.tags, list) else [q.tags]
@@ -98,89 +98,84 @@ class NegotiationSession:
 
             print("Invalid choice. Try again.")
 
-    def process_event(
-    self,
-    payload: Mapping[str, Any],
-    *,
-    ask_yes_no: Callable[[str], bool],
-    ask_pay: Callable[[int, int], bool],
-    ask_give_item: Callable[[str, int, int], bool],
-    items_catalog: Optional[Mapping[str, dict]] = None,
-    ) -> EventResult:
-    """
-    Apply a special event embedded in a choice. Pure logic:
-    - Uses UI hooks to ask the user (no prints here).
-    - Mutates session/player state (gold, inventory, rapport) as needed.
-    - Returns EventResult so UI can display a coherent message.
+    def process_event(self, payload: Mapping[str, Any], *, ask_yes_no: Callable[[str], bool], ask_pay: Callable[[int, int], bool], ask_give_item: Callable[[str, int, int], bool], items_catalog: Optional[Mapping[str, dict]] = None) -> EventResult:
+        """
+        Apply a special event embedded in a choice. Pure logic:
+        - Uses UI hooks to ask the user (no prints here).
+        - Mutates session/player state (gold, inventory, rapport) as needed.
+        - Returns EventResult so UI can display a coherent message.
 
-    Supported payload examples:
-      {"type":"ask_gold", "amount":5, "pay_rapport":2, "refuse_rapport":-1,
-       "join_on_pay":false, "flee_on_refuse":false, "message":"..."}
-      {"type":"ask_item", "item":"leaf_of_life", "amount":1, "consume":true,
-       "give_rapport":2, "decline_rapport":0, "join_on_give":false, "message":"..."}
-      {"type":"trap", "penalty_rapport":2, "flee_chance":0.25, "message":"..."}
-    """
-    # stub minimal: wire the structure, fill later with your current logic
-    etype = str(payload.get("type", "")).lower()
+        Supported payload examples:
+        {"type":"ask_gold", "amount":5, "pay_rapport":2, "refuse_rapport":-1,
+        "join_on_pay":false, "flee_on_refuse":false, "message":"..."}
+        {"type":"ask_item", "item":"leaf_of_life", "amount":1, "consume":true,
+        "give_rapport":2, "decline_rapport":0, "join_on_give":false, "message":"..."}
+        {"type":"trap", "penalty_rapport":2, "flee_chance":0.25, "message":"..."}
+        """
+        # stub minimal: wire the structure, fill later with your current logic
+        etype = str(payload.get("type", "")).lower()
 
-    if etype == "ask_gold":
-        amount = int(payload.get("amount", 0))
-        if amount <= 0:
-            return EventResult(applied=False, message="No gold requested.")
-        can = self.player.gold >= amount
-        ok = ask_pay(amount, self.player.gold) if can else False
-        if ok:
-            self.player.gold -= amount
-            dr = int(payload.get("pay_rapport", 0))
-            self.rapport = max(self.rapport + dr, self.rapport)  # clamp later if needed
-            return EventResult(applied=True, message="Gold paid.", delta_rapport=dr, consumed_gold=amount,
-                               join_now=bool(payload.get("join_on_pay", False)))
-        else:
-            dr = int(payload.get("refuse_rapport", 0))
+        if etype == "ask_gold":
+            amount = int(payload.get("amount", 0))
+            if amount <= 0:
+                return EventResult(applied=False, message="No gold requested.")
+            can = self.player.gold >= amount
+            ok = ask_pay(amount, self.player.gold) if can else False
+            if ok:
+                self.player.gold -= amount
+                dr = int(payload.get("pay_rapport", 0))
+                self.rapport = max(self.rapport + dr, self.rapport)  # clamp later if needed
+                return EventResult(applied=True, message="Gold paid.", delta_rapport=dr, consumed_gold=amount,
+                                join_now=bool(payload.get("join_on_pay", False)))
+            else:
+                dr = int(payload.get("refuse_rapport", 0))
+                self.rapport += dr
+                fled = bool(payload.get("flee_on_refuse", False))
+                if fled:
+                    self.in_progress = False
+                    self.fled = True
+                return EventResult(applied=True, message="Refused to pay.", delta_rapport=dr, fled_now=fled)
+
+        if etype == "ask_item":
+            item_id = str(payload.get("item", ""))
+            amt = int(payload.get("amount", 1))
+            consume = bool(payload.get("consume", True))
+            have = self.player.count_item(item_id)
+            ok = have >= amt and ask_give_item(item_id, amt, have)
+            if ok:
+                if consume:
+                    self.player.remove_item(item_id, amt)
+                dr = int(payload.get("give_rapport", 0))
+                self.rapport += dr
+                return EventResult(applied=True, message="Item given.", delta_rapport=dr,
+                                consumed_items={item_id: amt},
+                                join_now=bool(payload.get("join_on_give", False)))
+            else:
+                dr = int(payload.get("decline_rapport", 0))
+                self.rapport += dr
+                return EventResult(applied=True, message="Did not give the item.", delta_rapport=dr)
+
+        if etype == "trap":
+            dr = -abs(int(payload.get("penalty_rapport", 1)))
             self.rapport += dr
-            fled = bool(payload.get("flee_on_refuse", False))
+            # flee chance
+            import random as _r
+            fled = _r.random() < float(payload.get("flee_chance", 0.0))
             if fled:
                 self.in_progress = False
                 self.fled = True
-            return EventResult(applied=True, message="Refused to pay.", delta_rapport=dr, fled_now=fled)
+            return EventResult(applied=True, message="It was a trap.", delta_rapport=dr, fled_now=fled)
 
-    if etype == "ask_item":
-        item_id = str(payload.get("item", ""))
-        amt = int(payload.get("amount", 1))
-        consume = bool(payload.get("consume", True))
-        have = self.player.count_item(item_id)
-        ok = have >= amt and ask_give_item(item_id, amt, have)
-        if ok:
-            if consume:
-                self.player.remove_item(item_id, amt)
-            dr = int(payload.get("give_rapport", 0))
-            self.rapport += dr
-            return EventResult(applied=True, message="Item given.", delta_rapport=dr,
-                               consumed_items={item_id: amt},
-                               join_now=bool(payload.get("join_on_give", False)))
-        else:
-            dr = int(payload.get("decline_rapport", 0))
-            self.rapport += dr
-            return EventResult(applied=True, message="Did not give the item.", delta_rapport=dr)
-
-    if etype == "trap":
-        dr = -abs(int(payload.get("penalty_rapport", 1)))
-        self.rapport += dr
-        # flee chance
-        import random as _r
-        fled = _r.random() < float(payload.get("flee_chance", 0.0))
-        if fled:
-            self.in_progress = False
-            self.fled = True
-        return EventResult(applied=True, message="It was a trap.", delta_rapport=dr, fled_now=fled)
-
-    # Unknown event type
-    return EventResult(applied=False, message="No event applied.")
+        # Unknown event type
+        return EventResult(applied=False, message="No event applied.")
 
 
+    def process_answer(
+        self, 
+        effect: Dict[str, Any], 
+        personality_weights: Dict[str, Dict[str, int]],
+        personality_cues: Dict[str, Dict[str, str]]) -> ReactionFeedback:
 
-
-    def process_answer(self, effect: Dict[str, int]) -> ReactionFeedback:
         """
         Apply the chosen effect to stance and session state, then build a ReactionFeedback
         object for the UI layer. Pure logic: no prints, no input().
@@ -210,7 +205,7 @@ class NegotiationSession:
         stance.clamp()
 
         # --- 2) Demon reaction -> rapport delta (personality may influence inside .react) ---
-        d_rep, _ = self.demon.react(effect)
+        d_rep, _ = self.demon.react(effect, personality_weights)
         self.rapport = max(RAPPORT_MIN, min(RAPPORT_MAX, self.rapport + int(d_rep)))
 
         # --- 3) Advance turn & relax posture ---
@@ -225,9 +220,7 @@ class NegotiationSession:
         tone = tone_from_delta(int(d_rep))
         # try to use loaded cues; fall back to simple ellipsis
         try:
-            # your loader should expose a dict like: {"PLAYFUL": {"Pleased": "...", ...}, ...}
-            from drlite.data.loaders import PERSONALITY_CUES  # type: ignore
-            cue = flavor_cue(self.demon.personality, tone, PERSONALITY_CUES, default="…")
+            cue = flavor_cue(self.demon.personality, tone, personality_cues, default="...")
         except Exception:
             cue = "…"
 
@@ -239,16 +232,16 @@ class NegotiationSession:
         liked: list[str] = []
         disliked: list[str] = []
         try:
-            # weights example: {"PLAYFUL": {"mercy": +1.0, "order": -0.5, ...}, ...}
-            from drlite.data.loaders import PERSONALITY_WEIGHTS  # type: ignore
-            pkey = getattr(self.demon.personality, "name", str(self.demon.personality))
-            weights = PERSONALITY_WEIGHTS.get(str(pkey), {})
+            p_key = getattr(self.demon.personality, "name", str(self.demon.personality))
+            p_weights = personality_weights.get(p_key, {})
+
             for t in tags:
                 w = float(weights.get(t, 0.0))
                 if w > 0:
                     liked.append(t)
                 elif w < 0:
                     disliked.append(t)
+
         except Exception:
             # no weights loaded; leave both empty
             pass
@@ -269,7 +262,7 @@ class NegotiationSession:
             disliked_tags=disliked,
             notes=notes,
         )
-        self.last_feedback = fb  # optional: keep for UI to query
+        self.last_feedback = fb  
         return fb
 
 
@@ -326,6 +319,7 @@ class NegotiationSession:
             print(f"{self.demon.name} seems willing to join you.")
             self.recruited = True
             self.in_progress = False
+            self.player.roster.append(self.demon)
 
     def check_fled(self) -> None:
         """
@@ -349,34 +343,35 @@ class NegotiationSession:
             if hasattr(self.demon, "available"):
                 self.demon.available = False
 
-    def maybe_trigger_whim(
-        self,
-        whims: Optional[list[dict]] = None,
-    ) -> Optional[WhimResult]:
-        """
-        Roll and optionally apply a demon 'whim' (caprice). Pure logic, no prints.
-        Example whim entry (JSON):
-        {"id":"w_tease", "chance":0.15, "delta_rapport":-1, "message":"teases you."}
-        """
-        if not whims:
-            return None
-        r = self.rng or random
-        # simple pick: try each whim by chance
-        for w in whims:
-            chance = float(w.get("chance", 0.0))
-            if chance > 0 and r.random() < chance:
-                dr = int(w.get("delta_rapport", 0))
-                dt = int(w.get("delta_turns", 0))
-                self.rapport += dr
-                self.turns_left += dt
-                return WhimResult(triggered=True, message=str(w.get("message","")), delta_rapport=dr, delta_turns=dt)
-        return None
+    def maybe_trigger_whim(self, whims_templates: List[dict], whim_config: Dict[str, Any]) -> Optional[dict]:
+            """
+            Roll for a whim but DO NOT apply it yet. Return the raw payload so 
+            the controller can decide how to process it (e.g. via process_event).
+            """
+            if not whims_templates or not whim_config:
+                return None
 
+            base = float(whim_config.get("base_chance", 0.0))
+
+            p_name = getattr(self.demon.personality, "name", str(self.demon.personality)).upper()
+            mods = whim_config.get("personality_mod", {})
+            mod = float(mods.get(p_name, 0.0))
+
+            total_chance = base + mod
+
+            if self.rng.random() > total_chance:
+                return None
+
+            selected_whim = weighted_choice(whims_templates, weight_key="weight")
+                    
+            return selected_whim
+
+            
     def finish_fled(self) -> None:
-        """
-        If fled, finalize session flags (pure state).
-        """
-        if self.fled:
-            self.in_progress = False
+            """
+            If fled, finalize session flags (pure state).
+            """
+            if self.fled:
+                self.in_progress = False
 
 

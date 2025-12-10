@@ -1,4 +1,3 @@
-# drlite/utils.py
 """
 General-purpose helpers for the project.
 IMPORTANT: This module must NOT import from other drlite.* modules
@@ -190,6 +189,19 @@ def flavor_cue(personality: Any, tone: str, cues_by_name: Mapping[str, Mapping[s
     except Exception:
         return default
 
+def resolve_event_ref(effect: Dict[str, Any], registry: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    If the effect has an 'event_ref' key, look it up in the registry
+    and inject the full event definition under the 'event' key.
+    """
+    ref = effect.get("event_ref")
+    if ref:
+        # Buscamos en el registro inyectado
+        ev_data = registry.get(ref)
+        if ev_data:
+            effect["event"] = ev_data
+    return effect
+
 # ----------------------------
 # Backward-compat aliases
 # ----------------------------
@@ -206,5 +218,5 @@ __all__ = [
     "get_rng", "weighted_choice", "choice", "randint_range",
     "canonical_slug", "canonical_item_id", "canonical_demon_id", "normalize_tag",
     "ensure_list_of_str", "unique_preserve_order", "nested_get", "require_keys",
-    "tone_from_delta", "flavor_cue",
+    "tone_from_delta", "flavor_cue", "resolve_event_ref"
 ]

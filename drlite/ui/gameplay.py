@@ -6,7 +6,7 @@ from drlite.models import Demon, Player, Alignment, Question
 from drlite.engine.session import NegotiationSession
 from drlite.config import SAVE_PATH, ROUND_DELAY_SEC
 from drlite.persistence.io import save_game, load_game
-from drlite.ui.console import show_menu
+from drlite.ui.console import show_menu, ask_yes_no, ask_pay, ask_give_item, dispatch_action
 
 
 def choose_demon(demons: list[Demon], rng: Optional[random.Random] = None) -> Demon:
@@ -34,7 +34,8 @@ def bootstrap_session(demons_catalog:list["Demon"], questions_pool: list["Questi
     return NegotiationSession(player=player, demon=current_demon, question_pool=questions_pool, rng=rng)
 
 
-def run_game_loop(session: NegotiationSession, diff_level: int, demons_catalog: list[Demon]) -> None:
+def run_game_loop(session: NegotiationSession, diff_level: int, demons_catalog: list[Demon], weights: dict, whims: list, cues: dict, events_registry: dict, whim_config: dict) -> None:
+    
     """
     Core loop: show status, run menu, apply actions, check join/leave,
     apply difficulty pressure, and advance rounds until the session ends.
@@ -52,24 +53,33 @@ def run_game_loop(session: NegotiationSession, diff_level: int, demons_catalog: 
             print(f"\nEsta es la ronda número {session.round_no}.")
             session.show_status()
 
-            whim = session.maybe_trigger_whim()
-            if whim:
-                decision = run_special_event(session, whim)
-                session.process_event(whim, decision)
+            
+            whim_payload = session.maybe_trigger_whim(whims, whim_config)
+            
+            if whim_payload:
+                result = session.process_event(
+                    whim_payload,
+                    ask_yes_no=ask_yes_no,
+                    ask_pay=ask_pay,
+                    ask_give_item=ask_give_item
+                )
+                print(f"[Event] {result.message}")
 
-            opcion = show_menu(session)           # returns "1".."5" or "0" if ended
-            if opcion == "0":
+                if not session.in_progress:
+                    break
+
+            option = show_menu(session)           # returns "1".."5" or "0" if ended
+            if option == "0":
                 break
 
-            dispatch_action(session, opcion, demons_catalog)
+            dispatch_action(session, option, demons_catalog, weights, cues, events_registry)
 
             # Per your spec, check both conditions after actions:
             session.check_union()
             session.check_fled()
 
             # Optional pause
-            if delay > 0:
-                time.sleep(delay)
+            if delay > 0: time.sleep(delay)
 
             # Difficulty pressure
             session.difficulty(diff_level)
@@ -78,7 +88,23 @@ def run_game_loop(session: NegotiationSession, diff_level: int, demons_catalog: 
             session.round_no += 1
 
             # autosave at end of round
-            save_game(SAVE_PATH, session.player, demons_catalog, session)           
+            save_game(SAVE_PATH, session.player, demons_catalog, session)   
+
+            if session.recruited:
+                print("\n[Game] Guardando progreso (Reclutamiento exitoso)...")
+                for d in demons_catalog:
+
+                    if d.id == session.demon.id:
+                        d.available = False
+                        break
+                
+                save_game(SAVE_PATH, session.player, demons_catalog, None)
+        
+            elif session.fled:
+                # Opcional: Guardar si huyes (para descontar turnos o ítems usados)
+                save_game(SAVE_PATH, session.player, demons_catalog, None)
+
+                
     
     except (KeyboardInterrupt, EOFError):
         # Smooth exit: stop the session and mark as fled

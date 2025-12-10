@@ -1,6 +1,6 @@
 {
   "sources": {
-    "sjr": { "root": "assets/sjr/portraits/", "ext": "png" }
+    "sjr": { "root": "assets/sjr/", "ext": "png" }
   },
   "map": {
     "pixie":        { "portrait": "pixie.png" },

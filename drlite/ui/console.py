@@ -1,100 +1,69 @@
 from __future__ import annotations
-from typing import List
+from typing import List, Dict
 import random
+import textwrap
+from shutil import get_terminal_size
+from enum import Enum
 
 from drlite.models import Demon
-from drlite.engine.session import NegotiationSession
+from drlite.config import RAPPORT_MIN, RAPPORT_MAX
+try:
+    from drlite.assets.manifest import get_portrait_path
+except ImportError:
+    get_portrait_path = lambda d: None
 
-def print_banner() -> None:
-    print("SMT-lite Demon Recruitment 1.0 beta")
-    print("Negocia con demonios usando alineamiento y rapport.")
+# ==============================================================================
+#  Visual Helpers (Styles & Gauges)
+# ==============================================================================
 
-def read_difficulty() -> int:
+def _style(text: str, code: str, enable: bool = True) -> str:
+    """Apply ANSI color code."""
+    return f"\033[{code}m{text}\033[0m" if enable else text
+
+def rapport_gauge(val: int, lo: int = RAPPORT_MIN, hi: int = RAPPORT_MAX) -> str:
     """
-    Ask the user for a difficulty level (1..5). Clamp and return an int.
+    Visual bar for rapport: [··|·#··]
     """
-    while True:
-        raw = input("Elige nivel de dificultad (1-5): ").strip()
-        if raw.isdigit():
-            lvl = int(raw)
-            return max(1, min(5, lvl))
-        print("Entrada inválida. Intenta con un número entre 1 y 5.")
+    width = hi - lo + 1
+    width = max(3, width)
+    cells = ["·"] * width
 
-def show_menu(session) -> str:
-    if not session.in_progress:
-        print("La negociación ha terminado...")
-        return "0"
-    print("\n¿Qué deseas hacer?")
-    print("1) Responder la siguiente pregunta")
-    print("2) Bromear (minijuego rápido para ajustar rapport)")
-    print("3) Mostrar estado de la sesión")
-    print("4) Intentar cerrar trato ahora (evaluar unión)")
-    print("5) Despedirse (terminar negociación)")
-    print("6) Guardar y salir")  # NEW
-    valid = {"1","2","3","4","5","6"}
-    while True:
-        choice = input("Elige una opción (1-6): ").strip()
-        if choice in valid:
-            return choice
-        print("OPCION NO VALIDA. Intenta de nuevo.")
+    idx = max(0, min(width - 1, val - lo))
+    zero = max(0, min(width - 1, 0 - lo))
 
-def dispatch_action(session, option: str, demons_catalog: list[Demon]) -> None:
+    cells[zero] = "|"
+    cells[idx] = "#"
+    if idx == zero:
+        cells[idx] = "X" # Overlap
+
+    return "[" + "".join(cells) + "]"
+
+def distance_trend(delta: int) -> str:
+    if delta < 0: return ">>> (Acercándose)"
+    if delta > 0: return "<<< (Alejándose)"
+    return "---"
+
+def _rarity_label(rarity_obj: Any, color: bool = True) -> str:
     """
-    Dispatch the selected option to the corresponding session action.
-    Follows your spec strictly.
+    Format rarity with color.
     """
-    if option == "1":
-        effect = session.ask()
-        feedback = session.process_answer(effect)  # now returns ReactionFeedback
-
-        # Show reaction feedback (console layer)
-        print(f"{session.demon.name} looks {feedback.tone.lower()}. {feedback.cue}")
-        # Optional hints (only print if non-empty)
-        if feedback.liked_tags:
-            print("  Liked tags: " + ", ".join(feedback.liked_tags))
-        if feedback.disliked_tags:
-            print("  Disliked tags: " + ", ".join(feedback.disliked_tags))
-        # Compact numbers (you already show a HUD elsewhere, this is just a quick glance)
-        print("  " + " | ".join(feedback.notes))
-
-        # Intuitive indicators
-
-        print(f"  Rapport gauge: {rapport_gauge(session.rapport)}")
-        print(f"  Distance trend: {distance_trend(feedback.delta_distance)}")
-
-    elif option == "2":
-        # Simple rapport mini-game: guess a number 0..2
-        secret = session.rng.randint(0, 2)
-
-        while True:
-            raw = input("Adivina un número (0-2): ").strip()
-            if raw in {"0", "1", "2"}:
-                guess = int(raw)
-                break
-            print("Entrada inválida. Intenta de nuevo (0, 1 o 2).")
-
-        if guess == secret:
-            print("¡Correcto!")
-            session.rapport = min(RAPPORT_MAX, session.rapport + 2)
-        else:
-            print("Incorrecto.")
-            session.rapport = max(RAPPORT_MIN, session.rapport - 1)
-
-    elif option == "3":
-        session.show_status()
-    elif option == "4":
-        session.check_union()
-    elif option == "5":
-        session.in_progress = False
-        session.fled = True
-        print(f"{session.demon.name} se marcha...")
-    elif option == "6":
-        save_game(SAVE_PATH, session.player, demons_catalog, session)
-        print("Game saved. Exiting…")
-        session.in_progress = False
-        session.fled = True
+    # Handle Enum or string
+    if hasattr(rarity_obj, "value"): 
+        key = str(rarity_obj.value).lower()
+        raw = str(rarity_obj.value).upper()
     else:
-        print("OPCION NO VALIDA.")
+        key = str(rarity_obj).lower()
+        raw = str(rarity_obj).upper()
+
+    # Color theme per rarity
+    palette = {
+        "common":    "37",   # gray
+        "uncommon":  "32",   # green
+        "rare":      "34",   # blue
+        "epic":      "35",   # magenta
+        "legendary": "33",   # yellow
+    }
+    return _style(raw, palette.get(key, "37"), color)
 
 def print_dex_card(d: "Demon", show_portrait: bool = True, color: bool = True) -> None:
     # Header fields (robust against missing attrs)
@@ -147,17 +116,133 @@ def print_dex_card(d: "Demon", show_portrait: bool = True, color: bool = True) -
 
     print(f"╰{hr}╯")
 
-def ask_yes_no(prompt: str) -> bool:
-    while True:
-        ans = input(f"{prompt} [y/n]: ").strip().lower()
-        if ans in ("y","yes"): return True
-        if ans in ("n","no"):  return False
-        print("Please answer y/n.")
+# ==============================================================================
+#  Interaction Callbacks (Injected into Session)
+# ==============================================================================
 
-def ask_pay(amount: int, player_gold: int) -> bool:
-    print(f"The demon requests {amount} gold. You have {player_gold}.")
-    return ask_yes_no("Do you want to pay?")
+def ask_yes_no(prompt: str) -> bool:
+    """Generic Yes/No prompt."""
+    while True:
+        ans = input(f"{prompt} (y/n): ").strip().lower()
+        if ans in ("y", "yes", "s", "si"): return True
+        if ans in ("n", "no"):  return False
+        print("Por favor responde 'y' o 'n'.")
+
+def ask_pay(amount: int, current_gold: int) -> bool:
+    """
+    Callback for 'ask_gold' event.
+    """
+    print(f"\n[Evento] Te piden {amount} monedas. (Tienes: {current_gold})")
+    if current_gold < amount:
+        print("No tienes suficiente dinero.")
+        return False
+    return ask_yes_no("¿Aceptas pagar?")
 
 def ask_give_item(item_id: str, amount: int, have: int) -> bool:
-    print(f"The demon asks for {amount}x {item_id}. You have {have}.")
-    return ask_yes_no("Do you want to give it?")
+    """
+    Callback for 'ask_item' event.
+    """
+
+    display_name = item_id.replace("_", " ").title()
+    
+    print(f"\n[Evento] Te piden {amount}x {display_name}. (Tienes: {have})")
+    if have < amount:
+        print("No tienes suficientes ítems.")
+        return False
+    return ask_yes_no(f"¿Entregar {amount}x {display_name}?")
+
+
+# ==============================================================================
+#  Menus & Dispatch
+# ==============================================================================
+
+def print_banner() -> None:
+    print("========================================")
+    print(" SMT NEGOTIATION SIMULATOR (CLI) v1.0")
+    print("========================================")
+
+def read_difficulty() -> int:
+    while True:
+        raw = input("\nElige dificultad (1-5) [Default 3]: ").strip()
+        if not raw: return 3
+        if raw.isdigit() and 1 <= int(raw) <= 5:
+            return int(raw)
+        print("Inválido.")
+
+def show_menu(session) -> str:
+    if not session.in_progress:
+        print("La negociación ha terminado...")
+        return "0"
+    print("\n¿Qué deseas hacer?")
+    print("1) Responder la siguiente pregunta")
+    print("2) Bromear (minijuego rápido para ajustar rapport)")
+    print("3) Mostrar estado de la sesión")
+    print("4) Intentar cerrar trato ahora (evaluar unión)")
+    print("5) Despedirse (terminar negociación)")
+    print("6) Mostrar el DemonDex")
+    print("7) Guardar y salir")  
+    valid = {"1","2","3","4","5","6","7"}
+    while True:
+        choice = input("Elige una opción (1-6): ").strip()
+        if choice in valid:
+            return choice
+        print("OPCION NO VALIDA. Intenta de nuevo.")
+
+
+def dispatch_action(session, option: str, demons_catalog: list[Demon], weights: Dict[str, Dict[str, int]],cues: Dict[str, Dict[str, str]], events_registry: Dict[str, Any]) -> None:
+    """
+    Dispatch the selected option to the corresponding session action.
+    Follows your spec strictly.
+    """
+    if option == "1":
+        effect = session.ask(events_registry)
+        feedback = session.process_answer(effect, weights, cues)
+
+        # Show reaction feedback (console layer)
+        print(f"{session.demon.name} parece {feedback.tone.lower()}. {feedback.cue}")
+
+        # Optional hints (only print if non-empty)
+        info_parts = []
+        if feedback.liked_tags: info_parts.append(f"Le gustó: {', '.join(feedback.liked_tags)}")
+        if feedback.disliked_tags: info_parts.append(f"Odió: {', '.join(feedback.disliked_tags)}")
+        if info_parts:
+            print(f"({'; '.join(info_parts)})")
+
+        # Intuitive indicators
+
+        print(f"  Afinidad (Rapport): {rapport_gauge(session.rapport)}")
+        print(f"  Distancia: {distance_trend(feedback.delta_distance)}")
+
+    elif option == "2":
+        # Simple rapport mini-game: guess a number 0..2
+        secret = session.rng.randint(0, 2)
+
+        while True:
+            raw = input("Adivina un número (0-2): ").strip()
+            if raw in {"0", "1", "2"}:
+                guess = int(raw)
+                break
+            print("Entrada inválida. Intenta de nuevo (0, 1 o 2).")
+
+        if guess == secret:
+            print("¡Correcto!")
+            session.rapport = min(RAPPORT_MAX, session.rapport + 2)
+        else:
+            print("Incorrecto.")
+            session.rapport = max(RAPPORT_MIN, session.rapport - 1)
+
+    elif option == "3":
+        session.show_status()
+    elif option == "4":
+        session.check_union()
+    elif option == "5":
+        session.in_progress = False
+        session.fled = True
+        print(f"{session.demon.name} se marcha...")
+    elif option =="6":
+        print_dex_card(session.demon)
+    elif option == "7":
+        print("Game saved. Exiting…")
+        session.in_progress = False
+    else:
+        print("OPCION NO VALIDA.")

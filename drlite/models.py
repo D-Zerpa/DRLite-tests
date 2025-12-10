@@ -60,49 +60,36 @@ class Demon:
     available: bool = field(default=True, repr=False, compare=False)
 
 
-    def react(self, effect) -> tuple[int, int]:
-        """
-        Compute the demon's reaction to the chosen option.
+    def react(self, effect: dict, personality_weights: Dict[str, Dict[str, int]]) -> tuple[int, int]:
+            """
+            Compute the demon's reaction to the chosen option based on provided weights.
+            
+            Args:
+                effect: The effect payload from the chosen option.
+                personality_weights: A dictionary mapping Personality names to tag weights.
+            """
+            # 1. Extract Base dRapport
+            base = int(effect.get("dRapport", 0))
 
-        PHASE A (prototype): only forward the rapport change defined by the option.
-        Do NOT modify tolerance or any demon/session state here.
-        PHASE B (actual): base dRapport + personality tag-based bonus (from JSON). Tolerance unchanged.
-        Parameters
-        ----------
-        effect : dict or object with attribute 'dRapport'
-            The effect payload from the chosen option, e.g.:
-            {"dLC": int, "dLD": int, "dRapport": int, ...}
-            In this phase we only care about 'dRapport'.
+            # 2. Extract Tags
+            tags = effect.get("tags", [])
+            if not isinstance(tags, list):
+                tags = [tags]
+            tags = [str(t).lower() for t in tags]
 
-        Returns
-        -------
-        (delta_rapport, delta_tolerance) : tuple[int, int]
-        """
+            # 3. Calculate Bonus based on Personality
+            p_key = self.personality.name # Enum name, e.g. "PLAYFUL"
+            weights = personality_weights.get(p_key, {})
+            
+            bonus = 0
+            for t in tags:
+                bonus += int(weights.get(t, 0))
 
-        # Base dRapport
-
-        try:
-            base = effect.get("dRapport", 0)
-        except AttributeError:
-            base = getattr(effect, "dRapport", 0)
-        if not isinstance(base, (int, float)):
-            raise TypeError("dRapport must be numeric (int or float).")
-        base = int(base)
-
-        # Tags (prefer effect-level; you can also merge question-level tags in ask())
-        tags = effect.get("tags", []) if isinstance(effect, dict) else getattr(effect, "tags", [])
-        if not isinstance(tags, list):
-            tags = [tags]
-        tags = [str(t).lower() for t in tags]
-
-        # Lookup weights from the loaded registry
-        weights = PERSONALITY_TAG_WEIGHTS.get(self.personality, {})
-        bonus = 0
-        for t in tags:
-            bonus += int(weights.get(t, 0))
-
-        delta_rapport = clamp(base + bonus, -2, 2)
-        return delta_rapport, 0
+            # 4. Clamp result
+            total = base + bonus
+            delta_rapport = max(-2, min(2, total))
+            
+            return delta_rapport, 0
 
 
 @dataclass(slots=True, eq=False)
@@ -181,8 +168,6 @@ class WhimResult:
     delta_rapport: int = 0
     delta_turns: int = 0
 
-
-"""
     def pretty_inventory(self) -> str:
         """Return a human-readable inventory string using display names."""
         if not self.inventory:
@@ -193,5 +178,3 @@ class WhimResult:
             name = meta.get("display_name", iid.title())
             parts.append(f"{qty}x {name}")
         return ", ".join(parts)
-
-"""
