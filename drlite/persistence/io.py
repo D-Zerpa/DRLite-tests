@@ -1,145 +1,196 @@
-from __future__ import annotations
+import json
+import os
+from enum import Enum
+from typing import Any, Dict, Optional, List
 
-from typing import List, Dict, Optional, Tuple, TYPE_CHECKING
-from datetime import datetime
-import os, json, tempfile, random
+# ==============================================================================
+#  Robust JSON Encoder
+# ==============================================================================
 
-from drlite.models import Player, Demon, Alignment, Question
-from drlite.persistence.types import (
-    SaveAlignment, SaveGame, SavePlayer, SaveWorld, SaveSession, SaveDex
-)
+class DRLiteEncoder(json.JSONEncoder):
+    """
+    Custom encoder to serialize complex objects (Enums, Classes, Sets)
+    into native JSON types.
+    """
+    def default(self, obj: Any) -> Any:
+        # 1. Enums -> String (e.g., Personality.CUNNING -> "CUNNING")
+        if isinstance(obj, Enum):
+            return obj.name
+        
+        # 2. Sets -> List (JSON does not support sets)
+        if isinstance(obj, set):
+            return list(obj)
+            
+        # 3. Objects with __dict__ -> Dictionary
+        if hasattr(obj, "__dict__"):
+            return obj.__dict__
+            
+        try:
+            return super().default(obj)
+        except TypeError:
+            # Final fallback: string representation
+            return str(obj)
 
-# IMPORTANT: do NOT import NegotiationSession here to avoid circular import.
-# If you want type checking support:
-if TYPE_CHECKING:
-    from drlite.engine.session import NegotiationSession
+# ==============================================================================
+#  Atomic I/O System (Safe Save)
+# ==============================================================================
 
-SAVE_VERSION = 2
+def get_save_path(user_id: str | int) -> str:
+    """Returns the standardized path for the user's save file."""
+    os.makedirs("saves", exist_ok=True)
+    return f"saves/user_{user_id}.json"
 
-def demon_id(d: Demon) -> str:
-    return d.id
-
-def build_demon_index(demons: List[Demon]) -> Dict[str, Demon]:
-    return {d.id: d for d in demons}
-
-def alignment_to_save(a: Alignment) -> SaveAlignment:
-    return {"lc": int(a.law_chaos), "ld": int(a.light_dark)}
-
-def alignment_from_save(d: SaveAlignment) -> Alignment:
-    return Alignment(law_chaos=int(d["lc"]), light_dark=int(d["ld"]))
-
-def player_to_save(p: Player) -> SavePlayer:
-    return {
-        "core":  alignment_to_save(p.core_alignment),
-        "stance": alignment_to_save(p.stance_alignment),
-        "gold": int(getattr(p, "gold", 0)),
-        "inventory": {str(k): int(v) for k, v in getattr(p, "inventory", {}).items()},
-        "roster": [demon_id(d) for d in getattr(p, "roster", [])],
-    }
-
-def world_to_save(demons: List[Demon]) -> SaveWorld:
-    return {
-        "demons": {
-            demon_id(d): {"available": bool(getattr(d, "available", True))}
-            for d in demons
+def save_game(user_id: str | int, player: Any, demons_catalog: list, session=None) -> bool:
+    """
+    Saves the game state ATOMICALLY.
+    1. Writes to a temp file (.tmp).
+    2. Flushes to disk.
+    3. Renames .tmp to .json (atomic replacement).
+    
+    This prevents data corruption if the bot crashes during write operations.
+    """
+    final_path = get_save_path(user_id)
+    temp_path = f"{final_path}.tmp"
+    
+    # Prepare data structure
+    data = {
+        "version": 2,
+        "player": player,
+        # Only save world availability state to avoid duplication
+        "world_availability": {d.id: d.available for d in demons_catalog},
+        "stats": {
+            "session_active": session.in_progress if session else False,
+            # Add extra metrics here if needed
         }
     }
 
-def session_to_save(s: Optional["NegotiationSession"]) -> Optional[SaveSession]:
-    if not s:
-        return None
-    return {
-        "in_progress": bool(s.in_progress),
-        "demon_id": demon_id(s.demon),
-        "rapport": int(s.rapport),
-        "turns_left": int(s.turns_left),
-        "round_no": int(s.round_no),
-        "recruited": bool(s.recruited),
-        "fled": bool(s.fled),
-    }
-
-def dex_to_save(player: Player) -> Optional[SaveDex]:
-    seen = list(getattr(player, "dex_seen", []))
-    caught = [demon_id(d) for d in getattr(player, "roster", [])]
-    return {"seen": seen, "caught": caught} if (seen or caught) else None
-
-def save_game(path: str, player: Player, demons: List[Demon],
-              session: Optional["NegotiationSession"]) -> None:
-    data: SaveGame = {
-        "version": SAVE_VERSION,
-        "timestamp": datetime.utcnow().isoformat() + "Z",
-        "player": player_to_save(player),
-        "world": world_to_save(demons),
-        "session": session_to_save(session) if (session and session.in_progress) else None,
-        "demondex": dex_to_save(player),
-    }
-    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-    fd, tmp = tempfile.mkstemp(prefix=".tmp_save_", dir=os.path.dirname(path) or ".")
     try:
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-        os.replace(tmp, path)
-        print(f"[save] Saved to {path}")
-    except Exception:
-        try: os.remove(tmp)
-        except OSError: pass
-        raise
+        # Step 1: Write to temp file
+        with open(temp_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, cls=DRLiteEncoder)
+            f.flush()            # Force write to buffer
+            os.fsync(f.fileno()) # Force write to physical disk
 
-def load_game(path: str,
-              demons: List[Demon],
-              questions_pool: List[Question],
-              rng: random.Random) -> tuple[Player, Optional["NegotiationSession"]]:
+        # Step 2: Atomic replacement
+        os.replace(temp_path, final_path)
+        print(f"[System] Atomic save successful for user: {user_id}")
+        return True
+
+    except Exception as e:
+        print(f"[System] CRITICAL ERROR saving {user_id}: {e}")
+        # Cleanup temp file if it exists
+        if os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+            except OSError:
+                pass
+        return False
+
+def load_game_raw(user_id: str | int) -> Optional[Dict[str, Any]]:
+    """Loads the raw JSON dictionary from disk."""
+    path = get_save_path(user_id)
+    if not os.path.exists(path):
+        return None
+        
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except json.JSONDecodeError:
+        print(f"[System] WARNING: Corrupt save file for {user_id}. File will be ignored.")
+        return None
+    except Exception as e:
+        print(f"[System] I/O Error reading save {path}: {e}")
+        return None
+
+# ==============================================================================
+#  Rehydration Logic (Data -> Objects Translator)
+# ==============================================================================
+
+def rehydrate_game_state(raw_data: Dict[str, Any], player_class: Any, demons_catalog: list) -> Any:
     """
-    Late-import pattern: we import NegotiationSession INSIDE this function
-    to avoid a circular import between persistence.io and engine.session.
+    Converts raw data back into live objects, with safety checks.
+    
+    Args:
+        raw_data: The dictionary loaded from JSON.
+        player_class: The Player class type (injected to avoid circular imports).
+        demons_catalog: The master list of loaded Demon objects.
     """
-    with open(path, "r", encoding="utf-8") as f:
-        data: SaveGame = json.load(f)
+    version = raw_data.get('version', '?')
+    print(f"[System] Rehydrating state (v{version})...")
+    
+    # 1. Restore World Availability
+    world_avail = raw_data.get("world_availability", {})
+    if world_avail:
+        for demon in demons_catalog:
+            # Keys in JSON are always strings
+            if demon.id in world_avail:
+                demon.available = world_avail[demon.id]
 
-    ver = int(data.get("version", 0))
-    if ver != SAVE_VERSION:
-        raise ValueError(f"Incompatible save version: {ver} (expected {SAVE_VERSION})")
+    # 2. Reconstruct Player
+    p_data = raw_data.get("player", {})
+    player = player_class() # Create fresh instance
+    
+    # Restore simple properties (with safe defaults)
+    player.gold = int(p_data.get("gold", 0))
+    
+    # Restore and Sanitize Inventory
+    # Ensure keys are strings and values are ints > 0
+    raw_inv = p_data.get("inventory", {})
+    clean_inv = {}
+    for k, v in raw_inv.items():
+        try:
+            qty = int(v)
+            if qty > 0:
+                clean_inv[str(k)] = qty
+        except (ValueError, TypeError):
+            continue
+    player.inventory = clean_inv
 
-    # Rebuild player
-    sp = data["player"]
-    player = Player(core_alignment=alignment_from_save(sp["core"]))
-    player.stance_alignment = alignment_from_save(sp["stance"])
-    player.gold = int(sp.get("gold", 0))
-    player.inventory = {str(k): int(v) for k, v in sp.get("inventory", {}).items()}
+    # 3. Reconstruct Alignment (Defensive)
+    # Helper to handle legacy formats (list) vs new formats (dict)
+    def _extract_align(source, key):
+        val = source.get(key)
+        if isinstance(val, dict):
+            return int(val.get("law_chaos", 0)), int(val.get("light_dark", 0))
+        # Fallback for old saves if any
+        if isinstance(val, (list, tuple)) and len(val) >= 2:
+            return int(val[0]), int(val[1])
+        return 0, 0
 
-    # Apply world availability + roster
-    idx = build_demon_index(demons)
-    for did, meta in data.get("world", {}).get("demons", {}).items():
-        d = idx.get(did)
-        if d is not None and hasattr(d, "available"):
-            d.available = bool(meta.get("available", True))
+    # Core Alignment
+    lc, ld = _extract_align(p_data, "core")
+    if hasattr(player, "core_alignment"):
+        player.core_alignment.law_chaos = lc
+        player.core_alignment.light_dark = ld
 
-    for did in sp.get("roster", []):
-        d = idx.get(did)
-        if d and d not in player.roster:
-            player.roster.append(d)
-            if hasattr(d, "available"):
-                d.available = False
+    # Stance Alignment
+    lc, ld = _extract_align(p_data, "stance")
+    if hasattr(player, "stance_alignment"):
+        player.stance_alignment.law_chaos = lc
+        player.stance_alignment.light_dark = ld
+        
+    # 4. Reconstruct Roster (CRITICAL: Map IDs to Real Objects)
+    raw_roster = p_data.get("roster", [])
+    player.roster = []
+    
+    loaded_ids = set() # Track to avoid duplicates
+    
+    for entry in raw_roster:
+        # entry might be the serialized dict or just the ID string
+        d_id = entry.get("id") if isinstance(entry, dict) else str(entry)
+        
+        if d_id in loaded_ids:
+            continue # Skip duplicates
+            
+        # Find the REAL object in the memory catalog
+        # We do not create new Demon objects; we reference existing ones.
+        found = next((d for d in demons_catalog if d.id == d_id), None)
+        
+        if found:
+            player.roster.append(found)
+            loaded_ids.add(d_id)
+        else:
+            print(f"[Warning] Demon '{d_id}' found in save file but missing from catalog.")
 
-    sess_data = data.get("session")
-    if not sess_data:
-        return player, None
-
-    # >>> IMPORT HERE TO BREAK THE CYCLE <<<
-    from drlite.engine.session import NegotiationSession
-
-    did = sess_data["demon_id"]
-    demon = idx.get(did)
-    if demon is None:
-        raise KeyError(f"Saved demon '{did}' missing from catalog.")
-
-    sess = NegotiationSession(player=player, demon=demon,
-                              question_pool=questions_pool, rng=rng)
-    sess.in_progress = bool(sess_data.get("in_progress", True))
-    sess.rapport     = int(sess_data.get("rapport", 0))
-    sess.turns_left  = int(sess_data.get("turns_left", demon.patience))
-    sess.round_no    = int(sess_data.get("round_no", 1))
-    sess.recruited   = bool(sess_data.get("recruited", False))
-    sess.fled        = bool(sess_data.get("fled", False))
-    return player, sess
+    return player
 

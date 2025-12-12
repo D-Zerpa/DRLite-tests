@@ -1,8 +1,8 @@
 {
   "sources": {
-    "sjr": { "root": "assets/sjr/", "ext": "png" }
+    "sjr": { "root": "sjr", "ext": "png" }
   },
-  "map": {
+  "mappings": {
     "pixie":        { "portrait": "pixie.png" },
     "goblin":       { "portrait": "goblin.png" },
     "jack_frost":   { "portrait": "jack_frost.png" },

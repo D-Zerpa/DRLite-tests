@@ -4,10 +4,14 @@ import random
 
 from drlite.config import load_config, RNG_SEED
 from drlite.data.loaders import load_demons, load_questions, load_personality_weights, load_personality_cues, load_item_catalog, load_events, load_whims
-from drlite.assets.manifest import load_assets_manifest, validate_portraits
+from drlite.assets.manifest import load_assets_manifest
 from drlite.data.validators import validate_questions_against_items, validate_event_refs, validate_events_against_items
 from drlite.ui.console import print_banner, read_difficulty
-from drlite.ui.gameplay import bootstrap_session, run_game_loop, summarize_session
+from drlite.ui.gameplay import run_game_loop, handle_end_game
+from drlite.models import Player, Alignment 
+from drlite.persistence.io import save_game, load_game_raw, rehydrate_game_state
+from drlite.engine.session import NegotiationSession
+
 
 def main() -> None:
     print_banner()
@@ -27,12 +31,44 @@ def main() -> None:
     validate_event_refs(questions_pool, events_reg)
     validate_questions_against_items(questions_pool, items_cat)
     validate_events_against_items(events_reg, items_cat)
-    validate_portraits(demons_catalog, strict=False)
+
+
+    # === LOAD / NEW GAME LOGIC ===
+    user_id = "local_player" 
+    
+    raw_save = load_game_raw(user_id)
+    player = None
+
+    if raw_save:
+        print(f"Partida encontrada para {user_id}. Cargando...")
+        try:
+            player = rehydrate_game_state(raw_save, Player, demons_catalog)
+        except Exception as e:
+            print(f"Error rehidratando partida: {e}. Se creará una nueva.")
+            player = None
+
+    if player is None:
+        print("Iniciando nueva partida...")
+        player = Player(core_alignment=Alignment(0,0))
+        save_game(user_id, player, demons_catalog)
 
     diff = read_difficulty()
-    session = bootstrap_session(demons_catalog, questions_pool, rng)
+
+    # === GAME LOOP ===
+    
+    # 1. Verify Availability 
+    available_demons = [d for d in demons_catalog if d.available]
+    if not available_demons:
+        print("\n¡Felicidades! Has reclutado a todos los demonios disponibles.")
+        return
+
+    # 2. Choose demon
+    demon = rng.choice(available_demons)
+
+    # 3. Run Loop
+    session = NegotiationSession(player=player, demon=demon, question_pool=questions_pool, rng=rng)
     run_game_loop(session, diff, demons_catalog, weights=p_weights, whims=whim_templates, cues=p_cues, events_registry=events_reg, whim_config=whim_config)
-    summarize_session(session)
+    handle_end_game(session)
 
 if __name__ == "__main__":
     main()

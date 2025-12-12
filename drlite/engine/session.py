@@ -1,11 +1,11 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import List, Dict, Set, Optional, Any
+from typing import List, Dict, Set, Optional, Any, Callable
 import random
 
 from drlite.config import RAPPORT_MIN, RAPPORT_MAX, ROUND_DELAY_SEC
 from drlite.models import Player, Demon, Question, ReactionFeedback, EventResult, WhimResult
-from drlite.utils import weighted_choice, tone_from_delta, flavor_cue, ensure_list_of_str, resolve_event_ref
+from drlite.utils import weighted_choice, tone_from_delta, flavor_cue, ensure_list_of_str, resolve_event_ref, canonical_item_id
 
 
 @dataclass
@@ -98,7 +98,13 @@ class NegotiationSession:
 
             print("Invalid choice. Try again.")
 
-    def process_event(self, payload: Mapping[str, Any], *, ask_yes_no: Callable[[str], bool], ask_pay: Callable[[int, int], bool], ask_give_item: Callable[[str, int, int], bool], items_catalog: Optional[Mapping[str, dict]] = None) -> EventResult:
+    def process_event(
+        self, 
+        event: Dict[str, Any], 
+        ask_yes_no: Callable[[str], bool], 
+        ask_pay: Callable[[int, int], bool], 
+        ask_give_item: Callable[[str, int, int], bool]
+        ) -> EventResult:
         """
         Apply a special event embedded in a choice. Pure logic:
         - Uses UI hooks to ask the user (no prints here).
@@ -113,61 +119,81 @@ class NegotiationSession:
         {"type":"trap", "penalty_rapport":2, "flee_chance":0.25, "message":"..."}
         """
         # stub minimal: wire the structure, fill later with your current logic
-        etype = str(payload.get("type", "")).lower()
+        etype = str(event.get("type", "")).lower()
 
+        # --- CASE 1: ASK FOR GOLD ---
         if etype == "ask_gold":
-            amount = int(payload.get("amount", 0))
-            if amount <= 0:
-                return EventResult(applied=False, message="No gold requested.")
-            can = self.player.gold >= amount
-            ok = ask_pay(amount, self.player.gold) if can else False
-            if ok:
-                self.player.gold -= amount
-                dr = int(payload.get("pay_rapport", 0))
-                self.rapport = max(self.rapport + dr, self.rapport)  # clamp later if needed
-                return EventResult(applied=True, message="Gold paid.", delta_rapport=dr, consumed_gold=amount,
-                                join_now=bool(payload.get("join_on_pay", False)))
+            amount = int(event.get("amount", 0))
+            if amount < 0: amount = 0 
+
+            # Verification of quantity
+            if self.player.gold < amount:
+                # Demon realizes you don't have money.
+                return EventResult(False, "No tienes suficiente dinero para pagar.")
+
+            # Consult IU
+            accepted = ask_pay(amount, self.player.gold)
+            
+            if accepted:
+                # Doble verification.
+                if self.player.gold >= amount:
+                    self.player.gold -= amount
+                    
+                    # Success
+                    d_rep = int(event.get("success_rapport", 1))
+                    self.rapport += d_rep
+                    return EventResult(True, f"Pagaste {amount} macca. (Rapport +{d_rep})")
+                else:
+                    return EventResult(False, "Error: Fondos insuficientes al intentar pagar.")
             else:
-                dr = int(payload.get("refuse_rapport", 0))
-                self.rapport += dr
-                fled = bool(payload.get("flee_on_refuse", False))
-                if fled:
-                    self.in_progress = False
-                    self.fled = True
-                return EventResult(applied=True, message="Refused to pay.", delta_rapport=dr, fled_now=fled)
+                # User refuses.
+                return EventResult(False, "Decidiste no pagar.")
 
-        if etype == "ask_item":
-            item_id = str(payload.get("item", ""))
-            amt = int(payload.get("amount", 1))
-            consume = bool(payload.get("consume", True))
-            have = self.player.count_item(item_id)
-            ok = have >= amt and ask_give_item(item_id, amt, have)
-            if ok:
-                if consume:
-                    self.player.remove_item(item_id, amt)
-                dr = int(payload.get("give_rapport", 0))
-                self.rapport += dr
-                return EventResult(applied=True, message="Item given.", delta_rapport=dr,
-                                consumed_items={item_id: amt},
-                                join_now=bool(payload.get("join_on_give", False)))
+        # --- CASE 2: ASK FOR ITEMS ---
+        elif etype == "ask_item":
+            raw_name = str(event.get("item", "???"))
+            # ID Normalization.
+            item_id = canonical_item_id(raw_name) 
+            amount = int(event.get("amount", 1))
+
+            # Do you have the item?
+            current_qty = self.player.inventory.get(item_id, 0)
+            
+            if current_qty < amount:
+                # Automatic fail if you don't have the item.
+                return EventResult(False, f"El demonio pide {amount}x {raw_name}, pero no tienes suficientes.")
+
+            # Ask the UI
+            accepted = ask_give_item(item_id, amount, current_qty)
+
+            if accepted:
+                # Transaction
+                if self.player.inventory.get(item_id, 0) >= amount:
+                    self.player.inventory[item_id] -= amount
+                    # Inventory cleaning if ammount reaches 0
+                    if self.player.inventory[item_id] <= 0:
+                        del self.player.inventory[item_id]
+                    
+                    d_rep = int(event.get("success_rapport", 2))
+                    self.rapport += d_rep
+                    return EventResult(True, f"Entregaste {raw_name}. (Rapport +{d_rep})")
+                else:
+                     return EventResult(False, "Error: Ítem no disponible al intentar entregar.")
             else:
-                dr = int(payload.get("decline_rapport", 0))
-                self.rapport += dr
-                return EventResult(applied=True, message="Did not give the item.", delta_rapport=dr)
+                # Cheap penalization.
+                d_rep_fail = int(event.get("fail_rapport", -1))
+                self.rapport += d_rep_fail
+                return EventResult(False, f"Te negaste a dar el objeto. (Rapport {d_rep_fail})")
 
-        if etype == "trap":
-            dr = -abs(int(payload.get("penalty_rapport", 1)))
-            self.rapport += dr
-            # flee chance
-            import random as _r
-            fled = _r.random() < float(payload.get("flee_chance", 0.0))
-            if fled:
-                self.in_progress = False
-                self.fled = True
-            return EventResult(applied=True, message="It was a trap.", delta_rapport=dr, fled_now=fled)
+        # --- Other Events ---
+        elif etype == "trap":
+            damage = int(event.get("damage_rapport", -1))
+            self.rapport += damage
+            msg = event.get("message", "¡Es una trampa!")
+            return EventResult(True, f"{msg} (Rapport {damage})")
 
-        # Unknown event type
-        return EventResult(applied=False, message="No event applied.")
+        # Default.
+        return EventResult(True, str(event.get("message", "")))
 
 
     def process_answer(
@@ -309,17 +335,39 @@ class NegotiationSession:
             # If equal, do nothing (already centered relative to demon)
             self.player.stance_alignment.clamp()
 
+
     def check_union(self) -> None:
         """
-        If distance <= demon.tolerance AND rapport >= demon.rapport_needed,
-        mark as recruited and stop the session.
+        Evaluate if negotiations are successful.
+        Checks: Rapport threshold, Alignment distance, and Roster duplicates.
         """
+    
         dist = self.player.stance_alignment.manhattan_distance(self.demon.alignment)
-        if dist <= self.demon.tolerance and self.rapport >= self.demon.rapport_needed:
-            print(f"{self.demon.name} seems willing to join you.")
+        stance_ok = (dist <= self.demon.tolerance)
+        rapport_ok = (self.rapport >= self.demon.rapport_needed)
+
+        if rapport_ok and stance_ok:
+            already_have = False
+            for owned in self.player.roster:
+                owned_id = owned.id if hasattr(owned, "id") else str(owned)
+                if owned_id == self.demon.id:
+                    already_have = True
+                    break
+            
+            if already_have:
+                self.in_progress = False
+                self.recruited = False 
+                print(f"\n[Info] {self.demon.name} ya está en tu equipo. Se marcha satisfecho.") 
+                return
+
             self.recruited = True
             self.in_progress = False
-            self.player.roster.append(self.demon)
+            
+
+        elif self.turns_left <= 0:
+            self.in_progress = False
+            self.fled = True 
+
 
     def check_fled(self) -> None:
         """

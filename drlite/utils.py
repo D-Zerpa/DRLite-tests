@@ -45,29 +45,27 @@ def get_rng(seed: Optional[int] = None) -> random.Random:
     """Return a dedicated RNG; use 'random' module if you prefer global state."""
     return random.Random(seed) if seed is not None else random.Random()
 
-def weighted_choice(pairs: Iterable[Tuple[T, float]], rng: Optional[random.Random] = None) -> T:
+def weighted_choice(options: List[dict], weight_key: str = "weight") -> Optional[dict]:
     """
     Pick a single item from (item, weight) pairs.
     Negative weights are treated as 0. If all weights <= 0, returns the first item.
     """
-    items: List[T] = []
-    weights: List[float] = []
-    for item, w in pairs:
-        items.append(item)
-        weights.append(max(0.0, float(w)))
-    if not items:
-        raise ValueError("weighted_choice() received an empty iterable.")
-    total = sum(weights)
-    r = rng or random
-    if total <= 0.0:
-        return items[0]
-    pick = r.random() * total
-    acc = 0.0
-    for item, w in zip(items, weights):
-        acc += w
-        if pick <= acc:
-            return item
-    return items[-1]
+
+    if not options:
+        return None
+    
+    total = sum(float(x.get(weight_key, 0)) for x in options)
+    if total <= 0:
+        return random.choice(options)
+        
+    r = random.uniform(0, total)
+    upto = 0.0
+    for opt in options:
+        w = float(opt.get(weight_key, 0))
+        if upto + w >= r:
+            return opt
+        upto += w
+    return options[-1]
 
 def choice(seq: Sequence[T], rng: Optional[random.Random] = None) -> T:
     """Random choice that accepts an optional RNG."""
@@ -97,9 +95,13 @@ def canonical_slug(s: str) -> str:
     s = re.sub(r"_+", "_", s)
     return s.strip("_")
 
-def canonical_item_id(name: str) -> str:
-    """Canonical item ID (slug)."""
-    return canonical_slug(name)
+def canonical_item_id(raw_name: str) -> str:
+    """
+    Converts 'Life Stone' -> 'life_stone'.
+    """
+    if not raw_name:
+        return ""
+    return str(raw_name).strip().lower().replace(" ", "_")
 
 def canonical_demon_id(name: str) -> str:
     """Canonical demon ID (slug)."""
@@ -113,19 +115,18 @@ def normalize_tag(tag: str) -> str:
 # Collections & dict helpers
 # ----------------------------
 
-def ensure_list_of_str(value: Any) -> List[str]:
+def ensure_list_of_str(val: Any) -> List[str]:
     """
     Ensure value is a list[str]. Scalars -> [str(value)].
     None -> [].
     """
-    if value is None:
+    if val is None:
         return []
-    if isinstance(value, str):
-        return [value]
-    try:
-        return [str(x) for x in list(value)]
-    except Exception:
-        return [str(value)]
+    if isinstance(val, str):
+        return [val]
+    if isinstance(val, list):
+        return [str(v) for v in val]
+    return []
 
 def unique_preserve_order(seq: Iterable[T]) -> List[T]:
     """De-duplicate preserving first-seen order."""
@@ -162,32 +163,42 @@ def require_keys(d: Mapping[str, Any], keys: Sequence[str], ctx: str = "") -> No
 # Feedback helpers (tone & cues)
 # ----------------------------
 
-def tone_from_delta(d_rapport: int) -> str:
+def tone_from_delta(delta: int) -> str:
     """
     Map rapport delta -> coarse tone label.
     Keep it free of game classes to avoid imports.
     """
-    if d_rapport >= 2:
-        return "Delighted"
-    if d_rapport == 1:
-        return "Pleased"
-    if d_rapport == 0:
-        return "Neutral"
-    if d_rapport == -1:
-        return "Annoyed"
-    return "Enraged"
+    if delta > 0: return "contento"    
+    if delta < 0: return "molesto"    
+    return "pensativo"                 
 
-def flavor_cue(personality: Any, tone: str, cues_by_name: Mapping[str, Mapping[str, str]], default: str = "…") -> str:
+
+def flavor_cue(personality_enum: Any, tone: str, cues_data: Dict[str, Any], default: str = "...") -> str:
     """
     Resolve a short textual cue from personality + tone against a mapping:
       cues_by_name = { "PLAYFUL": {"Delighted": "✨ hee-ho!", ...}, ... }
     'personality' can be an Enum or a string; we use its .name or str().
     """
-    pkey = getattr(personality, "name", str(personality))
-    try:
-        return cues_by_name.get(str(pkey), {}).get(tone, default)
-    except Exception:
+    # Convert Enum to string key (e.g., Personality.GLOOMY -> "GLOOMY")
+    p_name = getattr(personality_enum, "name", str(personality_enum))
+    
+    # Look up in the dictionary
+    p_data = cues_data.get(p_name, {})
+    
+    # Tone mapping (English keys in JSON -> Spanish tone internal logic)
+    # Assuming JSON uses keys like "happy", "annoyed", "neutral"
+    tone_map = {
+        "contento": "happy",
+        "molesto": "annoyed",
+        "pensativo": "neutral"
+    }
+    json_key = tone_map.get(tone, "neutral")
+    
+    candidates = p_data.get(json_key, [])
+    if not candidates:
         return default
+        
+    return random.choice(candidates)
 
 def resolve_event_ref(effect: Dict[str, Any], registry: Dict[str, Any]) -> Dict[str, Any]:
     """

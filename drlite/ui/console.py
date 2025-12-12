@@ -1,16 +1,24 @@
 from __future__ import annotations
-from typing import List, Dict
-import random
+from typing import List, Dict, Any
+import os
 import textwrap
 from shutil import get_terminal_size
-from enum import Enum
 
-from drlite.models import Demon
 from drlite.config import RAPPORT_MIN, RAPPORT_MAX
+from drlite.models import Demon
+# Try to import asset helper, fail silently if missing (safe for CLI)
 try:
     from drlite.assets.manifest import get_portrait_path
 except ImportError:
     get_portrait_path = lambda d: None
+
+# ==============================================================================
+#  System Helpers
+# ==============================================================================
+
+def clear_screen() -> None:
+    """Clears the terminal screen for a cleaner UI experience."""
+    os.system('cls' if os.name == 'nt' else 'clear')
 
 # ==============================================================================
 #  Visual Helpers (Styles & Gauges)
@@ -20,10 +28,35 @@ def _style(text: str, code: str, enable: bool = True) -> str:
     """Apply ANSI color code."""
     return f"\033[{code}m{text}\033[0m" if enable else text
 
+def _rarity_label(rarity_obj: Any, color: bool = True) -> str:
+    """Format rarity with color and translated text."""
+    if hasattr(rarity_obj, "value"): 
+        key = str(rarity_obj.value).lower()
+    else:
+        key = str(rarity_obj).lower()
+
+    # Spanish translation map
+    trans = {
+        "common": "Común",
+        "uncommon": "Poco Común",
+        "rare": "Raro",
+        "epic": "Épico",
+        "legendary": "Legendario"
+    }
+    label = trans.get(key, key.title())
+
+    # Colors
+    palette = {
+        "common": "37",    # White
+        "uncommon": "32",  # Green
+        "rare": "34",      # Blue
+        "epic": "35",      # Magenta
+        "legendary": "33", # Yellow
+    }
+    return _style(label.upper(), palette.get(key, "37"), color)
+
 def rapport_gauge(val: int, lo: int = RAPPORT_MIN, hi: int = RAPPORT_MAX) -> str:
-    """
-    Visual bar for rapport: [··|·#··]
-    """
+    """Visual bar for rapport: [··|·#··]"""
     width = hi - lo + 1
     width = max(3, width)
     cells = ["·"] * width
@@ -34,123 +67,80 @@ def rapport_gauge(val: int, lo: int = RAPPORT_MIN, hi: int = RAPPORT_MAX) -> str
     cells[zero] = "|"
     cells[idx] = "#"
     if idx == zero:
-        cells[idx] = "X" # Overlap
+        cells[idx] = "X"
 
     return "[" + "".join(cells) + "]"
 
 def distance_trend(delta: int) -> str:
+    """Returns a visual indicator of alignment shift."""
     if delta < 0: return ">>> (Acercándose)"
     if delta > 0: return "<<< (Alejándose)"
-    return "---"
+    return "--- (Sin cambios)"
 
-def _rarity_label(rarity_obj: Any, color: bool = True) -> str:
-    """
-    Format rarity with color.
-    """
-    # Handle Enum or string
-    if hasattr(rarity_obj, "value"): 
-        key = str(rarity_obj.value).lower()
-        raw = str(rarity_obj.value).upper()
-    else:
-        key = str(rarity_obj).lower()
-        raw = str(rarity_obj).upper()
-
-    # Color theme per rarity
-    palette = {
-        "common":    "37",   # gray
-        "uncommon":  "32",   # green
-        "rare":      "34",   # blue
-        "epic":      "35",   # magenta
-        "legendary": "33",   # yellow
-    }
-    return _style(raw, palette.get(key, "37"), color)
-
-def print_dex_card(d: "Demon", show_portrait: bool = True, color: bool = True) -> None:
-    # Header fields (robust against missing attrs)
-    dex_no = getattr(d, "dex_no", None)
-    rarity = getattr(d, "rarity", "COMMON")
-    rarity_txt = _rarity_label(rarity, color)
+def print_dex_card(d: Demon, show_portrait: bool = True, color: bool = True) -> None:
+    """Prints a translated, detailed card of the demon."""
+    rarity_txt = _rarity_label(getattr(d, "rarity", "COMMON"), color)
     perso = getattr(d, "personality", None)
-    perso_txt = perso.name if isinstance(perso, Enum) else str(perso)
-
+    perso_txt = perso.name if hasattr(perso, "name") else str(perso)
+    
     lc = d.alignment.law_chaos
     ld = d.alignment.light_dark
 
-    # Resolve portrait path (may be None)
-    portrait_path = None
-    if show_portrait:
-        try:
-            from assets_manifest import get_portrait_path  # adjust import to your layout
-            portrait_path = get_portrait_path(d)
-        except Exception:
-            portrait_path = None
-
-    # Layout
-    width = max(60, min(90, get_terminal_size((80, 20)).columns))
+    try:
+        ts = get_terminal_size((80, 20))
+        width = max(60, min(90, ts.columns))
+    except Exception:
+        width = 60
+        
     hr = "─" * (width - 2)
-
-    title_left = f"{d.name}"
-    title_right = f"#{dex_no}" if isinstance(dex_no, int) else ""
-    title = title_left if not title_right else f"{title_left}  {title_right}"
-
-    # Wrap description
-    desc = getattr(d, "description", "") or ""
-    wrapped_desc = textwrap.wrap(desc, width=width - 4) if desc else []
-
-    # Print card
+    title = f" {d.name} "
+    
     print(f"╭{hr}╮")
-    print("│ " + _style(title, "1", color).ljust(width - 3) + "│")  # bold name
-    print("│ " + f"Rarity: {rarity_txt}".ljust(width - 3) + "│")
-    print("│ " + f"Personality: {perso_txt}".ljust(width - 3) + "│")
-    print("│ " + f"Alignment (LC/LD): ({lc}, {ld})".ljust(width - 3) + "│")
-    stats_line = f"Patience: {d.patience}  |  Tolerance: {d.tolerance}  |  Rapport needed: {d.rapport_needed}"
-    print("│ " + stats_line.ljust(width - 3) + "│")
+    print(f"│ {_style(title, '1', color).ljust(width + 4)} │") # +4 heuristic for bold codes
+    print(f"│ Rareza: {rarity_txt}".ljust(width + 7) + "│")
+    print(f"│ Personalidad: {perso_txt}".ljust(width - 3) + "│")
+    print(f"│ Alineación (LC/LD): ({lc}, {ld})".ljust(width - 3) + "│")
+    
+    stats_line = f"Paciencia: {d.patience} | Tolerancia: {d.tolerance}"
+    print(f"│ {stats_line}".ljust(width - 3) + "│")
 
-    if portrait_path:
-        print("│ " + f"Portrait: {portrait_path}".ljust(width - 3) + "│")
+    if show_portrait:
+        path = get_portrait_path(d)
+        if path:
+            # We just show the path in CLI, in Discord this would be the image attachment
+            print(f"│ Imagen: {os.path.basename(path)}".ljust(width - 3) + "│")
 
-    if wrapped_desc:
-        print("│ " + "Description:".ljust(width - 3) + "│")
-        for line in wrapped_desc:
-            print("│ " + line.ljust(width - 3) + "│")
+    desc = getattr(d, "description", "")
+    if desc:
+        print(f"│ {'Descripción:'.ljust(width - 4)} │")
+        wrapped = textwrap.wrap(desc, width=width - 6)
+        for line in wrapped:
+            print(f"│   {line}".ljust(width - 3) + "│")
 
     print(f"╰{hr}╯")
 
 # ==============================================================================
-#  Interaction Callbacks (Injected into Session)
+#  Interaction Callbacks (Spanish)
 # ==============================================================================
 
 def ask_yes_no(prompt: str) -> bool:
-    """Generic Yes/No prompt."""
+    """Generic Yes/No prompt in Spanish."""
     while True:
-        ans = input(f"{prompt} (y/n): ").strip().lower()
-        if ans in ("y", "yes", "s", "si"): return True
+        ans = input(f"{prompt} (s/n): ").strip().lower()
+        if ans in ("s", "si", "sí", "y", "yes"): return True
         if ans in ("n", "no"):  return False
-        print("Por favor responde 'y' o 'n'.")
+        print(">> Por favor responde 's' (sí) o 'n' (no).")
 
 def ask_pay(amount: int, current_gold: int) -> bool:
-    """
-    Callback for 'ask_gold' event.
-    """
-    print(f"\n[Evento] Te piden {amount} monedas. (Tienes: {current_gold})")
-    if current_gold < amount:
-        print("No tienes suficiente dinero.")
-        return False
+    """Callback for 'ask_gold' event."""
+    print(f"\n[Evento] El demonio te pide {amount} macca. (Tienes: {current_gold})")
     return ask_yes_no("¿Aceptas pagar?")
 
 def ask_give_item(item_id: str, amount: int, have: int) -> bool:
-    """
-    Callback for 'ask_item' event.
-    """
-
+    """Callback for 'ask_item' event."""
     display_name = item_id.replace("_", " ").title()
-    
     print(f"\n[Evento] Te piden {amount}x {display_name}. (Tienes: {have})")
-    if have < amount:
-        print("No tienes suficientes ítems.")
-        return False
     return ask_yes_no(f"¿Entregar {amount}x {display_name}?")
-
 
 # ==============================================================================
 #  Menus & Dispatch
@@ -213,6 +203,9 @@ def dispatch_action(session, option: str, demons_catalog: list[Demon], weights: 
         print(f"  Afinidad (Rapport): {rapport_gauge(session.rapport)}")
         print(f"  Distancia: {distance_trend(feedback.delta_distance)}")
 
+        # Pause to read the reaction
+        input("\n(Presiona Enter para continuar...)")
+
     elif option == "2":
         # Simple rapport mini-game: guess a number 0..2
         secret = session.rng.randint(0, 2)
@@ -231,18 +224,25 @@ def dispatch_action(session, option: str, demons_catalog: list[Demon], weights: 
             print("Incorrecto.")
             session.rapport = max(RAPPORT_MIN, session.rapport - 1)
 
+        input("\n(Presiona Enter para continuar...)")
+
     elif option == "3":
         session.show_status()
+        input("\n(Presiona Enter para volver al menú...)")
     elif option == "4":
         session.check_union()
+        input("\n(Presiona Enter para volver al menú...)")
     elif option == "5":
         session.in_progress = False
         session.fled = True
         print(f"{session.demon.name} se marcha...")
+        input("\n(Presiona Enter para continuar...)")
     elif option =="6":
+        clear_screen()
         print_dex_card(session.demon)
+        input("\n(Presiona Enter para volver al menú...)")
     elif option == "7":
-        print("Game saved. Exiting…")
+        print("Juego guardado. Saliendo...")
         session.in_progress = False
     else:
         print("OPCION NO VALIDA.")

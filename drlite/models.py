@@ -1,7 +1,7 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import Dict, List, Set
+from enum import Enum, auto
+from typing import Dict, List, Set, Any, Optional
 
 from drlite.config import AXIS_MIN, AXIS_MAX
 
@@ -94,8 +94,8 @@ class Demon:
 
 @dataclass(slots=True, eq=False)
 class Player:
-    core_alignment: Alignment
-    stance_alignment: Alignment = field(init=False)
+    core_alignment: Alignment = field(default_factory=lambda: Alignment(0, 0))
+    stance_alignment: Alignment = field(default_factory=lambda: Alignment(0, 0))
     roster: List[Demon] = field(default_factory=list)
     gold: int = 10
     inventory: Dict[str, int] = field(default_factory= dict)
@@ -109,17 +109,17 @@ class Player:
         """
         Move stance 1 step per axis toward core, then clamp.
         """
-        for attr in ("law_chaos", "light_dark"):
-            s = getattr(self.stance_alignment, attr)
-            c = getattr(self.core_alignment, attr)
+        cx, cy = self.core_alignment.law_chaos, self.core_alignment.light_dark
+        sx, sy = self.stance_alignment.law_chaos, self.stance_alignment.light_dark
 
-            # Direction: -1, 0, or +1
-            direction = 0 if s == c else (1 if c > s else -1)
-
-            delta = direction * min(step, abs(c - s))
-            setattr(self.stance_alignment, attr, s + delta)
-
-        self.stance_alignment.clamp()
+        if sx < cx: sx += 1
+        elif sx > cx: sx -= 1
+        
+        if sy < cy: sy += 1
+        elif sy > cy: sy -= 1
+        
+        self.stance_alignment.law_chaos = sx
+        self.stance_alignment.light_dark = sy
 
     def add_item(self, name: str, qty: int = 1) -> None:
         """Add items to the inventory using canonical IDs."""

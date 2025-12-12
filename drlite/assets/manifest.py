@@ -1,87 +1,75 @@
-from __future__ import annotations
-from typing import Dict, Any, Optional, List
-import os, json
+import os
+import json
+from typing import Optional, Dict, Any
 
-ASSETS_MANIFEST: Dict[str, Any] = {}
+# ==============================================================================
+#  PATHFINDER: El sistema de rutas dinámicas
+# ==============================================================================
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(os.path.dirname(CURRENT_DIR))
+DATA_DIR = os.path.join(PROJECT_ROOT, "data")
+IMG_DIR = os.path.join(PROJECT_ROOT, "img")
+_ASSETS_MANIFEST: Dict[str, Any] = {}
 
-
-def load_assets_manifest(path: str = "assets_manifest.json") -> None:
+def load_assets_manifest(filename: str = "assets_manifest.json") -> Dict[str, Any]:
     """
-    Load the portraits-only manifest into ASSETS_MANIFEST.
-    Schema:
-      {
-        "sources": { "sjr": { "root": "assets/sjr/portraits/", "ext": "png" } },
-        "map": { "pixie": { "portrait": "pixie.png" } }
-      }
+    Carga el JSON de configuración de assets desde la carpeta 'data/'.
     """
-    global ASSETS_MANIFEST
-    if not os.path.exists(path):
-        print(f"[assets] {path} not found. Portraits will be unavailable.")
-        ASSETS_MANIFEST = {"sources": {}, "map": {}}
-        return
-    with open(path, "r", encoding="utf-8") as f:
-        ASSETS_MANIFEST = json.load(f)
-    if "sources" not in ASSETS_MANIFEST or "map" not in ASSETS_MANIFEST:
-        raise ValueError("assets_manifest.json must contain 'sources' and 'map' keys.")
-    print(f"[assets] Manifest loaded with {len(ASSETS_MANIFEST.get('map', {}))} entries.")
+    global _ASSETS_MANIFEST
+    
+    full_path = os.path.join(DATA_DIR, filename)
+    
+    if not os.path.exists(full_path):
+        print(f"[assets] WARNING: No se encontró el manifest en: {full_path}")
+        return {}
 
+    try:
+        with open(full_path, "r", encoding="utf-8") as f:
+            _ASSETS_MANIFEST = json.load(f)
+        
+        # Debug info
+        count = len(_ASSETS_MANIFEST.get('sources', {}))
+        print(f"[assets] Manifest cargado correctamente desde {full_path}. Fuentes detectadas: {count}")
+        return _ASSETS_MANIFEST
+    except Exception as e:
+        print(f"[assets] ERROR: El archivo {filename} está corrupto o es ilegible: {e}")
+        return {}
 
-def get_portrait_path(demon: "Demon", variant: str = "neutral") -> Optional[str]:
+def get_portrait_path(demon_id: str | Any, expression: str = "default") -> Optional[str]:
     """
-    Return the absolute path to the demon's portrait file, or None if not found.
-    Supports two forms:
-      "portrait": "file.png"
-      "portrait": { "neutral": "file.png", "angry": "file2.png", ... }
+    Devuelve la RUTA ABSOLUTA de la imagen del demonio para que Discord la pueda subir.
+    
+    Args:
+        demon_id: El objeto Demon o su ID string.
     """
-    sources = ASSETS_MANIFEST.get("sources", {})
-    amap = ASSETS_MANIFEST.get("map", {})
-    src_key = getattr(demon, "sprite_source", None) or "sjr"
-    key = getattr(demon, "sprite_key", None) or demon.id
+    if not _ASSETS_MANIFEST:
+        load_assets_manifest()
+        if not _ASSETS_MANIFEST:
+            return None
 
-    entry = amap.get(key)
+    d_id = getattr(demon_id, "id", str(demon_id))
+
+    mappings = _ASSETS_MANIFEST.get("mappings", {})
+    entry = mappings.get(d_id)
+    
     if not entry:
         return None
 
-    p = entry.get("portrait")
-    if p is None:
+    source_key = entry.get("source") 
+    img_key = entry.get("key")       
+    
+
+    sources = _ASSETS_MANIFEST.get("sources", {})
+    src_config = sources.get(source_key)
+    
+    if not src_config:
         return None
+    root_folder = src_config.get("root", "")
+    ext = src_config.get("ext", ".png")
 
-    # string or dict
-    if isinstance(p, str):
-        filename = p
-    elif isinstance(p, dict):
-        filename = p.get(variant) or p.get("neutral")
-        if not filename:
-            # pick any available variant as fallback
-            filename = next(iter(p.values()), None)
-    else:
-        return None
-
-    if not filename:
-        return None
-
-    root = _resolve_source_root(src_key)
-    return os.path.join(root, filename)
-
-def validate_portraits(demons: list["Demon"], strict: bool = True) -> None:
-    """
-    Validate that every demon has a portrait entry and the file exists.
-    If strict=False, only warn for missing files; otherwise raise.
-    """
-    problems = []
-    for d in demons:
-        path = get_portrait_path(d)
-        if path is None:
-            problems.append(f"[{d.id}] portrait not mapped (source={getattr(d, 'sprite_source', 'sjr')}, key={getattr(d, 'sprite_key', d.id)})")
-        else:
-            if not os.path.exists(path):
-                problems.append(f"[{d.id}] portrait file missing: {path}")
-
-    if problems:
-        msg = "\n".join(problems[:12])
-        if strict:
-            raise RuntimeError(f"[assets] Portrait validation failed ({len(problems)} issues):\n{msg}")
-        else:
-            print(f"[assets] Portrait validation warnings ({len(problems)}):\n{msg}")
-    else:
-        print(f"[assets] Portraits validated for {len(demons)} demons.")
+    full_path = os.path.join(IMG_DIR, root_folder, f"{img_key}{ext}")
+    
+    if os.path.exists(full_path):
+        return full_path
+    
+    return None
