@@ -4,20 +4,27 @@ import json, os
 
 from drlite.models import Demon, Alignment, Question, Personality
 from drlite.utils import canonical_slug, coerce_int, canonical_item_id, ensure_list_of_str
-from drlite.data.types import ItemDef, Effect
+from drlite.data.types import ItemDef, Effect, Rarity
 
+
+# ==============================================================================
+#  HELPERS
+# ==============================================================================
+
+def _parse_alignment(raw_val: Any) -> Alignment:
+    if isinstance(raw_val, dict):
+        return Alignment(int(raw_val.get("law_chaos", 0)), int(raw_val.get("light_dark", 0)))
+    if isinstance(raw_val, (list, tuple)) and len(raw_val) >= 2:
+        return Alignment(int(raw_val[0]), int(raw_val[1]))
+    return Alignment(0, 0)
+
+# ==============================================================================
+#  LOADERS
+# ==============================================================================
 
 def load_demons(path: str) -> List[Demon]:
     """
     Load demons from JSON:
-    [
-      {
-        "name": "Pixie",
-        "alignment": {"law_chaos": 1, "light_dark": 2},
-        "personality": "PLAYFUL",
-        "patience": 5, "tolerance": 4, "rapport_needed": 2
-      }, ...
-    ]
     """
     if not os.path.exists(path):
         raise FileNotFoundError(f"Demons file not found: {path}")
@@ -37,6 +44,8 @@ def load_demons(path: str) -> List[Demon]:
             lc = coerce_int(al.get("law_chaos", 0))
             ld = coerce_int(al.get("light_dark", 0))
             align = Alignment(law_chaos=lc, light_dark=ld)
+            r_str = str(item.get("rarity", "COMMON")).upper()
+            r_enum = getattr(Rarity, r_str, Rarity.COMMON)
 
             personality = _parse_personality(item.get("personality", "PLAYFUL"))
             patience = coerce_int(item.get("patience", 4), 4)
@@ -49,6 +58,7 @@ def load_demons(path: str) -> List[Demon]:
                     name=name,
                     alignment=align,
                     personality=personality,
+                    rarity=r_enum,
                     patience=patience,
                     tolerance=tolerance,
                     rapport_needed=rapport_needed,
@@ -161,48 +171,37 @@ def load_personality_weights(path: str = "data/personality_weights.json") -> Non
     print(f"[weights] Loaded weights for {len(weights)} personalities.")
     return weights
 
-def load_item_catalog(path: str = "data/items.json"):
-    
-    """Load and RETURN item catalog."""
-
+def load_item_catalog(path: str = "data/items.json") -> Dict[str, ItemDef]:
     if not os.path.exists(path):
-        print(f"[items] {path} not found. Loaded empty catalog.")
+        print(f"[items] Items not found on {path}")
         return {}
 
-    with open(path, "r", encoding="utf-8") as f:
-        raw = json.load(f)
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            raw = json.load(f)
 
-    if not isinstance(raw, dict):
-        raise ValueError("items.json must be a JSON object mapping item_id -> item metadata.")
-
-    catalog: Dict[str, ItemDef] = {}
-    for raw_key, meta in raw.items():
-        key = canonical_item_id(raw_key)
-        if not isinstance(meta, dict):
-            raise ValueError(f"Item '{raw_key}' must have an object as value.")
+        catalog = {}
+        for raw_key, meta in raw.items():
+            key = raw_key.lower() 
             
-        display = str(meta.get("display_name") or raw_key.title())
-        rarity = str(meta.get("rarity") or "common").lower()
-    
+            r_str = str(meta.get("rarity", "COMMON")).upper()
+            r_enum = getattr(Rarity, r_str, Rarity.COMMON)
 
-        try:
-            value = int(meta.get("value", 0))
-        except (TypeError, ValueError):
-            value = 0
-            
-        stackable = bool(meta.get("stackable", True))
-        desc = str(meta.get("description", ""))
-        catalog[key] = ItemDef(
-            display_name=display,
-            rarity=rarity, 
-            value=value,
-            stackable=stackable,
-            description=desc,
-        )
+            catalog[key] = ItemDef(
+                display_name=str(meta.get("display_name") or raw_key.title()),
+                rarity=r_enum,
+                value=int(meta.get("value", 0)),
+                stackable=bool(meta.get("stackable", True)),
+                description=str(meta.get("description", "")),
+            )
+        
+        print(f"[Items] Loaded {len(catalog)} items.")
+        return catalog
+    except Exception as e:
+        print(f"[Items] Error: {e}")
+        return {}
 
     
-    print(f"[items] Loaded {len(catalog)} items.")
-    return catalog
     
 
 def load_events(path: str = "data/events.json"):

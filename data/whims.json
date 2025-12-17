@@ -1,78 +1,60 @@
 {
-  "base_chance": 0.12,
+  "base_chance": 0.25,
+  "comment": "Probabilidad base de 25% por turno de que ocurra un evento.",
+  
   "personality_mod": {
-    "PLAYFUL": 0.05,
-    "CHILDISH": 0.04,
-    "MOODY": 0.03,
-    "CUNNING": 0.02,
-    "PROUD": -0.02
+    "UPBEAT": 1.2,
+    "TIMID": 0.8,
+    "IRRITABLE": 1.5,
+    "GLOOMY": 1.0,
+    "CUNNING": 1.1
   },
+  
   "entries": [
-    {
-      "id": "whim_gold_1_3",
-      "type": "ask_gold",
-      "amount_range": [1, 3],
-      "pay_rapport": 1,
-      "refuse_rapport": 1,
-      "weight": 3,
-      "message": "Caprichosamente te pide unas monedas."
+    { 
+      "id": "beg_macca_small", 
+      "weight": 30,
+      "note": "Lo más común: pedir un poco de dinero."
     },
-    {
-      "id": "whim_gold_2_5",
-      "type": "ask_gold",
-      "amount_range": [2, 5],
-      "pay_rapport": 1,
-      "refuse_rapport": 1,
+    { 
+      "id": "beg_item_common", 
+      "weight": 25,
+      "note": "Pide items comunes (Life Stone, Medicine)."
+    },
+    { 
+      "id": "beg_mp_small", 
+      "weight": 20,
+      "note": "Pide energía mágica. Costo bajo, recuperable."
+    },
+    { 
+      "id": "beg_hp_small", 
+      "weight": 15,
+      "note": "Pide un poco de vida. Agrega tensión."
+    },
+    { 
+      "id": "mystery_box", 
+      "weight": 15,
+      "note": "Minijuego de apuesta (Gamble)."
+    },
+    { 
+      "id": "trap_simple", 
+      "weight": 10,
+      "note": "Daño directo a la afinidad."
+    },
+    { 
+      "id": "beg_macca_large", 
+      "weight": 5,
+      "note": "Pide mucho dinero. Raro."
+    },
+    { 
+      "id": "beg_item_rare", 
+      "weight": 5,
+      "note": "Pide items raros (Bead, Amethyst). Muy exigente."
+    },
+    { 
+      "id": "vampire_kiss", 
       "weight": 2,
-      "message": "Insinúa que 'todo tiene un precio'."
-    },
-    {
-      "id": "whim_item_morsel",
-      "type": "ask_item",
-      "item": "odd morsel",
-      "amount": 1,
-      "consume": true,
-      "give_rapport": 1,
-      "decline_rapport": 1,
-      "only_if_has_item": false,
-      "weight": 2,
-      "message": "Le apetece un bocado extraño."
-    },
-    {
-      "id": "whim_item_leaf_if_have",
-      "type": "ask_item",
-      "item": "leaf of life",
-      "amount": 1,
-      "consume": true,
-      "give_rapport": 1,
-      "decline_rapport": 1,
-      "only_if_has_item": true,
-      "weight": 1,
-      "message": "Te pide una Leaf of Life si la llevas encima."
-    },
-    {
-      "id": "whim_item_holy_if_have",
-      "type": "ask_item",
-      "item": "holy water",
-      "amount": 1,
-      "consume": true,
-      "give_rapport": 1,
-      "decline_rapport": 1,
-      "only_if_has_item": true,
-      "weight": 1,
-      "message": "Requiere Holy Water para continuar hablando."
-    },
-    {
-      "id": "whim_item_coin_if_have",
-      "type": "ask_item",
-      "item": "rusted coin",
-      "amount": 2,
-      "consume": true,
-      "give_rapport": 1,
-      "decline_rapport": 0,
-      "only_if_has_item": true,
-      "weight": 1,
-      "message": "Te pide un par de Rusted Coin como 'ofrenda'."
+      "note": "Drenaje masivo de HP. Muy raro pero peligroso."
     }
   ]
 }

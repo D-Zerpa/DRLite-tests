@@ -22,12 +22,12 @@ def run_game_loop(
     session: NegotiationSession, 
     diff_level: int, 
     demons_catalog: list[Demon],
+    user_id: str,
     weights: dict,
     whims: list,
     cues: dict,
     events_registry: dict,
-    whim_config: dict
-) -> None:
+    whim_config: dict) -> None:
     """
     Main synchronous game loop for the CLI.
     
@@ -42,9 +42,6 @@ def run_game_loop(
     # Apply difficulty settings to the session constraints
     session.difficulty(diff_level)
     
-    # Fixed ID for local CLI play. In Discord, this would be the user's ID.
-    user_id = "local_player"
-
     # Determine delay for pacing
     try:
         delay = ROUND_DELAY_SEC
@@ -55,16 +52,16 @@ def run_game_loop(
         while session.in_progress:
             # --- 1. UI REFRESH ---
             clear_screen()
-            print(f"--- RONDA {session.round_no} ---\n")
+            p = session.player
+            print(f"--- RONDA {session.round_no} | {p.name} Lv.{p.lvl} ---")
+            print(f"HP: {p.hp}/{p.max_hp}  |  MP: {p.mp}/{p.max_mp}  |  Macca: {p.gold}")
+            print(f"XP: {p.exp}/{p.exp_next}")
+            print("-" * 40 + "\n")
             
             # Status Bar
             # We use the visual gauge for rapport
             print(f"Turnos: {session.turns_left} | Rapport: {rapport_gauge(session.rapport)}")
-            
-            # Show alignment if relevant for the player
-            # print(f"Postura (LC/LD): {session.player.stance_alignment}") 
-            
-            print(f"Demonio: {session.demon.name}")
+            print(f"Demonio: {session.demon.name} (Rara: {session.demon.rarity.name})")
             print("-" * 40)
             
             # --- 2. WHIMS (Random Events) ---
@@ -91,15 +88,15 @@ def run_game_loop(
                     break
 
             # --- 3. MENU / ACTION ---
-            opcion = show_menu(session)
+            option = show_menu(session)
             
-            if opcion == "0":
+            if option == "0":
                 # Fallback exit
                 break 
 
             # Dispatch the chosen option (1=Talk, 2=Flee, 3=Analyze)
             # We pass all injected data catalogs to the dispatch function
-            dispatch_action(session, opcion, demons_catalog, weights, cues, events_registry)
+            dispatch_action(session, option, demons_catalog, weights, cues, events_registry)
 
             # --- 4. POST-TURN CHECKS ---
             # Check if recruitment conditions are met
@@ -137,15 +134,15 @@ def handle_end_game(session: NegotiationSession, user_id: str, demons_catalog: l
     print("=== FIN DE LA NEGOCIACIÓN ===\n")
     
     outcome_msg = ""
+
+    player = session.player
     
     if session.recruited:
-        outcome_msg = "RECLUTADO"
-        print(f"¡ÉXITO! {session.demon.name} se ha unido a tu equipo.")
-        
-        # 1. Update Global Availability (Memory)
-        for d in demons_catalog:
-            if d.id == session.demon.id:
-                d.available = False
+        if player.has_demon(session.demon.id):
+            pass
+        else:
+            print(f"\n¡ÉXITO! {session.demon.name} se ha unido a tu equipo!")
+            player.roster.append(session.demon)
         
         # 2. Add to Player Roster (Memory)
         # Check duplicates just in case, though session.check_union handles logic
@@ -156,7 +153,7 @@ def handle_end_game(session: NegotiationSession, user_id: str, demons_catalog: l
         
     elif session.fled:
         outcome_msg = "HUIDA"
-        print("Huiste de la negociación de una pieza.")
+        print("Huiste de la negociación.")
         
     else:
         outcome_msg = "FRACASO"

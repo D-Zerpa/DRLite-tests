@@ -184,7 +184,20 @@ def dispatch_action(session, option: str, demons_catalog: list[Demon], weights: 
     Dispatch the selected option to the corresponding session action.
     Follows your spec strictly.
     """
+    clear_screen()
     if option == "1":
+        clear_screen()
+        p = session.player
+        print(f"--- RONDA {session.round_no} | {p.name} Lv.{p.lvl} ---")
+        print(f"HP: {p.hp}/{p.max_hp}  |  MP: {p.mp}/{p.max_mp}  |  Macca: {p.gold}")
+        print(f"XP: {p.exp}/{p.exp_next}")
+        print("-" * 40 + "\n")
+        
+        # Status Bar
+        # We use the visual gauge for rapport
+        print(f"Turnos: {session.turns_left} | Rapport: {rapport_gauge(session.rapport)}")
+        print(f"Demonio: {session.demon.name} (Rara: {session.demon.rarity.name})")
+        print("-" * 40)
         effect = session.ask(events_registry)
         feedback = session.process_answer(effect, weights, cues)
 

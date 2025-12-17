@@ -1,7 +1,9 @@
 import json
 import os
 from enum import Enum
-from typing import Any, Dict, Optional, List
+from typing import Any, Dict, Optional, List, Tuple
+from dataclasses import asdict, is_dataclass
+from drlite.models import Player, Alignment, Demon, Personality, Rarity
 
 # ==============================================================================
 #  Robust JSON Encoder
@@ -43,35 +45,50 @@ def get_save_path(user_id: str | int) -> str:
 def save_game(user_id: str | int, player: Any, demons_catalog: list, session=None) -> bool:
     """
     Saves the game state ATOMICALLY.
-    1. Writes to a temp file (.tmp).
-    2. Flushes to disk.
-    3. Renames .tmp to .json (atomic replacement).
     
-    This prevents data corruption if the bot crashes during write operations.
+    CRITICAL FIX: Explicitly converts the Player dataclass to a dictionary
+    using `asdict`. This prevents the JSON serializer from writing the 
+    player object as a string string "Player(...)", which causes 
+    loading errors later.
     """
+    # Ensure we have the path (assuming this function exists in your scope)
     final_path = get_save_path(user_id)
     temp_path = f"{final_path}.tmp"
     
-    # Prepare data structure
+    # 1. Convert Player Dataclass to Dictionary
+    if is_dataclass(player):
+        player_data = asdict(player)
+    elif isinstance(player, dict):
+        player_data = player
+    else:
+        # Fallback: try to get __dict__ or convert to string (last resort)
+        player_data = getattr(player, "__dict__", str(player))
+
+    # 2. Extract World State (Demon Availability)
+    # We only save the availability boolean to save space
+    world_data = {d.id: d.available for d in demons_catalog}
+
+    # 3. Construct the Final Data Structure
     data = {
         "version": 2,
-        "player": player,
-        # Only save world availability state to avoid duplication
-        "world_availability": {d.id: d.available for d in demons_catalog},
+        "player": player_data,  # This is now a clean Dictionary
+        "world_availability": world_data,
         "stats": {
             "session_active": session.in_progress if session else False,
-            # Add extra metrics here if needed
         }
     }
 
     try:
-        # Step 1: Write to temp file
+        # Step 4: Write to temp file
         with open(temp_path, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2, cls=DRLiteEncoder)
+            # use default=str to automatically handle Enums (like Personality.UPBEAT)
+            # if they are present inside the dictionary
+            json.dump(data, f, indent=2, default=str)
+            
             f.flush()            # Force write to buffer
             os.fsync(f.fileno()) # Force write to physical disk
 
-        # Step 2: Atomic replacement
+        # Step 5: Atomic replacement
         os.replace(temp_path, final_path)
         print(f"[System] Atomic save successful for user: {user_id}")
         return True
@@ -86,21 +103,77 @@ def save_game(user_id: str | int, player: Any, demons_catalog: list, session=Non
                 pass
         return False
 
-def load_game_raw(user_id: str | int) -> Optional[Dict[str, Any]]:
-    """Loads the raw JSON dictionary from disk."""
+def load_game(user_id: str | int, demons_catalog: List[Demon]) -> Tuple[Player, List[Demon]]:
+    """
+    Loads the game state and reconstructs the Player object with RPG stats.
+    Re-links roster IDs to actual Demon objects from the catalog.
+    """
     path = get_save_path(user_id)
+    
+    # If no save exists, return a fresh player
     if not os.path.exists(path):
-        return None
-        
+        print(f"[System] No save found for {user_id}. Creating new.")
+        return Player(), demons_catalog
+
     try:
         with open(path, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except json.JSONDecodeError:
-        print(f"[System] WARNING: Corrupt save file for {user_id}. File will be ignored.")
-        return None
+            data = json.load(f)
+
+        p_data = data.get("player", {})
+
+        # --- 1. Reconstruct Alignments ---
+        # Helper to convert dict back to Alignment object
+        def parse_align(d: dict) -> Alignment:
+            if not d: return Alignment(0, 0)
+            return Alignment(int(d.get("law_chaos", 0)), int(d.get("light_dark", 0)))
+
+        core_align = parse_align(p_data.get("core_alignment", {}))
+        stance_align = parse_align(p_data.get("stance_alignment", {}))
+
+        # --- 2. Reconstruct Roster ---
+        # Convert saved IDs back into references to the Demon objects in memory
+        roster_objs = []
+        raw_roster = p_data.get("roster", [])
+        
+        for item in raw_roster:
+            # Handle if roster is saved as a list of dicts or list of IDs
+            d_id = item.get("id") if isinstance(item, dict) else item
+            
+            # Find the matching demon in the master catalog
+            found_demon = next((d for d in demons_catalog if d.id == d_id), None)
+            if found_demon:
+                roster_objs.append(found_demon)
+
+        # --- 3. Instantiate Player ---
+        player = Player(
+            name=str(p_data.get("name", "Nahobino")),
+            
+            # RPG Stats
+            lvl=int(p_data.get("lvl", 1)),
+            exp=int(p_data.get("exp", 0)),
+            exp_next=int(p_data.get("exp_next", 100)),
+            
+            hp=int(p_data.get("hp", 50)),
+            max_hp=int(p_data.get("max_hp", 50)),
+            mp=int(p_data.get("mp", 20)),
+            max_mp=int(p_data.get("max_mp", 20)),
+            
+            # Economy & Inventory
+            gold=int(p_data.get("gold", 0)),
+            inventory=p_data.get("inventory", {}),
+            
+            # Objects
+            core_alignment=core_align,
+            stance_alignment=stance_align,
+            roster=roster_objs
+        )
+
+        print(f"[System] Save loaded. {player.name} Lv.{player.lvl} (HP {player.hp}/{player.max_hp})")
+        return player, demons_catalog
+
     except Exception as e:
-        print(f"[System] I/O Error reading save {path}: {e}")
-        return None
+        print(f"[System] Error loading save for {user_id}: {e}")
+        return Player(), demons_catalog
 
 # ==============================================================================
 #  Rehydration Logic (Data -> Objects Translator)

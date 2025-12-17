@@ -4,7 +4,8 @@ from typing import List, Dict, Set, Optional, Any, Callable
 import random
 
 from drlite.config import RAPPORT_MIN, RAPPORT_MAX, ROUND_DELAY_SEC
-from drlite.models import Player, Demon, Question, ReactionFeedback, EventResult, WhimResult
+from drlite.models import Player, Demon, Question, ReactionFeedback, EventResult, WhimResult, Rarity
+from drlite.data.types import ItemDef
 from drlite.utils import weighted_choice, tone_from_delta, flavor_cue, ensure_list_of_str, resolve_event_ref, canonical_item_id
 
 
@@ -14,6 +15,8 @@ class NegotiationSession:
     player: Player
     demon: Demon
     question_pool: List[Question]
+    items_catalog: Dict[str, ItemDef]
+    events_registry: Dict[str, Any]
 
     # State
 
@@ -73,14 +76,14 @@ class NegotiationSession:
 
         # 2) Get a valid option index
         while True:
-            raw = input("Choose an option number: ").strip()  # replace with safe_input(...) if you added it
+            raw = input("Elige una opción: ").strip()
             if raw.isdigit():
                 i = int(raw)
                 if 1 <= i <= len(options):
                     _, effect = options[i - 1]
 
                     # 3) Merge question-level tags into the effect (without mutating the pool)
-                    eff_copy = dict(effect)  # shallow copy is enough for our flat dict
+                    eff_copy = dict(effect)
                     eff_tags = eff_copy.get("tags", [])
                     if not isinstance(eff_tags, list):
                         eff_tags = [eff_tags]
@@ -98,102 +101,190 @@ class NegotiationSession:
 
             print("Invalid choice. Try again.")
 
+    def _get_demand_multiplier(self) -> float:
+        """
+        Define how picky is the Demon
+        """
+        multipliers = {
+            Rarity.COMMON: 1.0,      # x1 (Base)
+            Rarity.UNCOMMON: 1.5,    # x1.5
+            Rarity.RARE: 3.0,        # x3
+            Rarity.EPIC: 5.0,        # x5
+            Rarity.LEGENDARY: 10.0   # x10
+        }
+        return multipliers.get(self.demon.rarity, 1.0)
+
     def process_event(
         self, 
-        event: Dict[str, Any], 
-        ask_yes_no: Callable[[str], bool], 
-        ask_pay: Callable[[int, int], bool], 
-        ask_give_item: Callable[[str, int, int], bool]
-        ) -> EventResult:
-        """
-        Apply a special event embedded in a choice. Pure logic:
-        - Uses UI hooks to ask the user (no prints here).
-        - Mutates session/player state (gold, inventory, rapport) as needed.
-        - Returns EventResult so UI can display a coherent message.
+        whim_trigger: Dict[str, Any], 
+        ask_yes_no: Callable,
+        ask_pay: Callable,
+        ask_give_item: Callable) -> EventResult:
+        
+        # 1. Hydrate
+        event_id = whim_trigger.get("id")
+        event_data = self.events_registry.get(event_id, whim_trigger)
+        
+        w_type = event_data.get("type")
+        multiplier = self._get_demand_multiplier()
+        
+        # Base Text
+        print(f"\n[Evento] {event_data.get('text', '...')}")
 
-        Supported payload examples:
-        {"type":"ask_gold", "amount":5, "pay_rapport":2, "refuse_rapport":-1,
-        "join_on_pay":false, "flee_on_refuse":false, "message":"..."}
-        {"type":"ask_item", "item":"leaf_of_life", "amount":1, "consume":true,
-        "give_rapport":2, "decline_rapport":0, "join_on_give":false, "message":"..."}
-        {"type":"trap", "penalty_rapport":2, "flee_chance":0.25, "message":"..."}
-        """
-        # stub minimal: wire the structure, fill later with your current logic
-        etype = str(event.get("type", "")).lower()
+        # ======================================================================
+        # ASK_GOLD
+        # ======================================================================
+        if w_type == "ask_gold":
+            base_amt = event_data.get("amount", 100)
+            amount = max(10, int(base_amt * multiplier)) # Escalado
 
-        # --- CASE 1: ASK FOR GOLD ---
-        if etype == "ask_gold":
-            amount = int(event.get("amount", 0))
-            if amount < 0: amount = 0 
-
-            # Verification of quantity
-            if self.player.gold < amount:
-                # Demon realizes you don't have money.
-                return EventResult(False, "No tienes suficiente dinero para pagar.")
-
-            # Consult IU
-            accepted = ask_pay(amount, self.player.gold)
-            
-            if accepted:
-                # Doble verification.
+            if ask_pay(amount, self.player.gold):
                 if self.player.gold >= amount:
-                    self.player.gold -= amount
-                    
-                    # Success
-                    d_rep = int(event.get("success_rapport", 1))
-                    self.rapport += d_rep
-                    return EventResult(True, f"Pagaste {amount} macca. (Rapport +{d_rep})")
+                    self.player.change_gold(-amount)
+                    self.rapport += event_data.get("success_rapport", 5)
+                    return EventResult(True, f"Pagaste {amount} Macca.")
                 else:
-                    return EventResult(False, "Error: Fondos insuficientes al intentar pagar.")
+                    self.rapport += event_data.get("fail_rapport", -5)
+                    return EventResult(False, "No tienes suficiente dinero.")
             else:
-                # User refuses.
-                return EventResult(False, "Decidiste no pagar.")
+                self.rapport += event_data.get("refuse_rapport", -2)
+                return EventResult(False, "Te negaste a pagar.")
 
-        # --- CASE 2: ASK FOR ITEMS ---
-        elif etype == "ask_item":
-            raw_name = str(event.get("item", "???"))
-            # ID Normalization.
-            item_id = canonical_item_id(raw_name) 
-            amount = int(event.get("amount", 1))
-
-            # Do you have the item?
-            current_qty = self.player.inventory.get(item_id, 0)
+        # ======================================================================
+        #  ASK_ITEM
+        # ======================================================================
+        elif w_type == "ask_item":
+            # 1. Determine pickyness of the demon
+            target_rarity_str = event_data.get("target_rarity", "COMMON").upper()
             
-            if current_qty < amount:
-                # Automatic fail if you don't have the item.
-                return EventResult(False, f"El demonio pide {amount}x {raw_name}, pero no tienes suficientes.")
+            # 2. Filter items from the catalogue
+            candidates = []
+            for pid, pdef in self.items_catalog.items():
+                r_val = "COMMON"
+                if hasattr(pdef, "rarity"):
+                    r_val = getattr(pdef.rarity, "name", str(pdef.rarity))
 
-            # Ask the UI
-            accepted = ask_give_item(item_id, amount, current_qty)
+                elif isinstance(pdef, dict):
+                    r_val = str(pdef.get("rarity", "COMMON"))
 
-            if accepted:
-                # Transaction
-                if self.player.inventory.get(item_id, 0) >= amount:
-                    self.player.inventory[item_id] -= amount
-                    # Inventory cleaning if ammount reaches 0
-                    if self.player.inventory[item_id] <= 0:
-                        del self.player.inventory[item_id]
-                    
-                    d_rep = int(event.get("success_rapport", 2))
-                    self.rapport += d_rep
-                    return EventResult(True, f"Entregaste {raw_name}. (Rapport +{d_rep})")
+                if r_val.upper() == target_rarity_str:
+                    candidates.append(pid)
+
+            
+            # Fallback: If there are no items, fails
+            if not candidates:
+                candidates = list(self.items_catalog.keys())
+                
+            if not candidates:
+                return EventResult(True, "(El demonio quería pedir algo, pero no existen items en el juego)")
+
+            # 3. Pick random item
+            item_id = self.rng.choice(candidates)
+            
+            # 4. Quantity
+            base_qty = event_data.get("quantity", 1)
+            qty = max(1, int(base_qty * (0.5 + (multiplier / 2))))
+
+            # 5. Petition
+            has_it = self.player.has_item(item_id, qty)
+            curr_qty = self.player.inventory.get(item_id, 0)
+            
+            print(f"[Sistema] El demonio señala tu: {item_id} (Pide {qty})")
+            
+            if ask_give_item(item_id, qty, curr_qty):
+                if has_it:
+                    self.player.remove_item(item_id, qty)
+                    self.rapport += event_data.get("success_rapport", 10)
+                    return EventResult(True, f"Entregaste {qty}x {item_id}.")
                 else:
-                     return EventResult(False, "Error: Ítem no disponible al intentar entregar.")
+                    self.rapport += event_data.get("fail_rapport", -5)
+                    return EventResult(False, "No tienes el objeto.")
             else:
-                # Cheap penalization.
-                d_rep_fail = int(event.get("fail_rapport", -1))
-                self.rapport += d_rep_fail
-                return EventResult(False, f"Te negaste a dar el objeto. (Rapport {d_rep_fail})")
+                self.rapport += event_data.get("refuse_rapport", -2)
+                return EventResult(False, "Te negaste a dar el objeto.")
 
-        # --- Other Events ---
-        elif etype == "trap":
-            damage = int(event.get("damage_rapport", -1))
-            self.rapport += damage
-            msg = event.get("message", "¡Es una trampa!")
-            return EventResult(True, f"{msg} (Rapport {damage})")
+        # ======================================================================
+        #  ASK_HP
+        # ======================================================================
+        elif w_type == "ask_hp":
+            base_amt = event_data.get("amount", 10)
+            # El daño escala con rareza
+            cost = int(base_amt * multiplier)
+            
+            # Usamos ask_yes_no. Texto informativo.
+            print(f"[Sistema] Costo: {cost} HP (Tu HP actual: {self.player.hp})")
+            
+            if ask_yes_no(f"¿Permites que drene tu energía?"):
+                # Verificamos si sobreviviría (opcional, o dejamos que muera)
+                if self.player.hp <= cost:
+                    # El jugador acepta morir
+                    self.player.change_hp(-cost)
+                    return EventResult(False, "¡Te drenó toda la vida! (HP 0)")
+                
+                self.player.change_hp(-cost)
+                self.rapport += event_data.get("success_rapport", 15)
+                return EventResult(True, f"Sacrificaste {cost} HP.")
+            else:
+                self.rapport += event_data.get("refuse_rapport", -5)
+                return EventResult(False, "Protegiste tu vida.")
 
-        # Default.
-        return EventResult(True, str(event.get("message", "")))
+
+        # ======================================================================
+        #  ASK_MP
+        # ======================================================================
+        elif w_type == "ask_mp":
+            base_amt = event_data.get("amount", 5)
+            cost = int(base_amt * multiplier)
+
+            print(f"[Sistema] Costo: {cost} MP (Tu MP actual: {self.player.mp})")
+
+            if ask_yes_no("¿Compartes tu Mana?"):
+                if self.player.mp >= cost:
+                    self.player.change_mp(-cost)
+                    self.rapport += event_data.get("success_rapport", 10)
+                    return EventResult(True, f"Cediste {cost} MP.")
+                else:
+                    self.rapport += event_data.get("fail_rapport", -5)
+                    return EventResult(False, "No tienes suficiente MP.")
+            else:
+                self.rapport += event_data.get("refuse_rapport", -2)
+                return EventResult(False, "Te negaste.")
+
+
+        # ======================================================================
+        #  GAMBLE
+        # ======================================================================
+        elif w_type == "gamble":
+            cost = int(event_data.get("amount", 100) * multiplier)
+            
+            if ask_pay(cost, self.player.gold):
+                if self.player.gold >= cost:
+                    self.player.change_gold(-cost)
+                    
+                    # 50% Gana item, 50% Nada
+                    if self.rng.random() > 0.5:
+                        # Gana algo (reutilizamos lógica de reward)
+                        self._give_item_reward() # Método que creamos antes
+                        self.rapport += 5
+                        return EventResult(True, "¡Ganaste la apuesta!")
+                    else:
+                        self.rapport -= 2 # Se burla de ti
+                        return EventResult(False, "El demonio se ríe. No obtuviste nada.")
+                else:
+                    return EventResult(False, "No tienes dinero para apostar.")
+            else:
+                return EventResult(False, "Ignoraste la apuesta.")
+
+        # ======================================================================
+        #  TRAMPA
+        # ======================================================================
+        elif w_type == "trap":
+            base_dmg = event_data.get("damage_rapport", 5)
+            dmg = int(base_dmg * (1 + (multiplier * 0.2)))
+            self.rapport -= dmg
+            return EventResult(False, f"¡Trampa! Perdiste {dmg} de afinidad.")
+
+        return EventResult(True, "Evento desconocido o sin efecto.")
 
 
     def process_answer(
@@ -382,14 +473,110 @@ class NegotiationSession:
 
     def finish_union(self) -> None:
         """
-        If recruited, add demon to roster and mark unavailable.
-        No printing here; UI layer reports outcome.
+        Final cleanup when negotiation succeeds.
+        Branching Logic:
+        - If new demon: Recruit.
+        - If existing demon: Give Reward (Macca/Items).
         """
-        if self.recruited:
-            if self.demon not in self.player.roster:
-                self.player.roster.append(self.demon)
-            if hasattr(self.demon, "available"):
-                self.demon.available = False
+        self.player.relax_posture()
+        
+        xp_gain = int(20 * self._get_demand_multiplier())
+        lvl_up = self.player.gain_exp(xp_gain)
+        
+        print(f"\n[Progreso] ¡Ganaste {xp_gain} XP!")
+        if lvl_up:
+            print(f"[!!!] ¡LEVEL UP! Ahora eres Nivel {self.player.lvl}")
+            print(f"      HP: {self.player.max_hp} | MP: {self.player.max_mp}")
+
+        # Check if the player already has this demon
+        if self.player.has_demon(self.demon.id):
+            self._give_duplicate_reward()
+        else:
+            # Here we just mark the success state.
+            print(f"\n{self.demon.name}: 'Excelente, me uniré a tu equipo'")
+
+    
+
+    def _give_duplicate_reward(self) -> None:
+        """
+        Define if the reward is Macca or Items.
+        """
+
+        print(f"\n{self.demon.name}: 'Ya viajamos juntos. Toma esto para el camino.'")
+        
+        # 50% Macca / 50% Item
+        if self.rng.random() < 0.5:
+            self._give_macca_reward()
+        else:
+            self._give_item_reward()
+        
+
+    def _give_macca_reward(self):
+        """ 
+        Scalar logic for Macca giving.
+        """
+        ranges = {
+            Rarity.COMMON:    (10, 50),
+            Rarity.UNCOMMON:  (50, 150),
+            Rarity.RARE:      (150, 400),
+            Rarity.EPIC:      (400, 1000),
+            Rarity.LEGENDARY: (1000, 5000)
+        }
+        min_v, max_v = ranges.get(self.demon.rarity, (10, 50))
+        amount = self.rng.randint(min_v, max_v)
+        
+        self.player.change_gold(amount)
+        print(f"[Recompensa] ¡El demonio te dio {amount} Macca!")
+
+    def _give_item_reward(self):
+        """
+        Scalar logic for items:
+        - Common: 1x Common
+        - Uncommon: 1x Uncommon O 2x Common
+        - Rare: 1x Rare O 2x Uncommon O 4x Common
+        """
+       
+        rarity_tiers = {
+            Rarity.COMMON: 0, 
+            Rarity.UNCOMMON: 1, 
+            Rarity.RARE: 2, 
+            Rarity.EPIC: 3, 
+            Rarity.LEGENDARY: 4
+        }
+        
+        demon_tier = rarity_tiers.get(self.demon.rarity, 0)
+        
+        # Let the demon choose which kind of item to give, depending on their rarity.
+        target_item_tier = self.rng.randint(0, demon_tier)
+        
+        # Determine the quantity of items they'll give.
+        quantity = 2 ** (demon_tier - target_item_tier)
+        
+        tier_to_rarity = {v: k for k, v in rarity_tiers.items()}
+        target_rarity_enum = tier_to_rarity.get(target_item_tier, Rarity.COMMON)
+        
+        # Filter in the catalogue.
+        candidates = [
+            (pid, pdef) for pid, pdef in self.items_catalog.items()
+            if pdef.rarity == target_rarity_enum]
+
+        # Security fallback.
+        if not candidates:
+            target_rarity_enum = Rarity.COMMON
+            candidates = [
+                (pid, pdef) for pid, pdef in self.items_catalog.items()
+                if pdef.rarity == Rarity.COMMON
+            ]
+            
+        if candidates:
+            chosen_id, chosen_def = self.rng.choice(candidates)
+            self.player.add_item(chosen_id, quantity)
+            # Usamos .name para mostrar "COMMON", "RARE", etc.
+            print(f"[Reward] Recibiste {quantity}x {chosen_def.display_name} ({target_rarity_enum.name})!")
+        else:
+            print("[System] (El demonio no encontró nada útil...)")
+            self._give_macca_reward()
+    
 
     def maybe_trigger_whim(self, whims_templates: List[dict], whim_config: Dict[str, Any]) -> Optional[dict]:
             """

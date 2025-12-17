@@ -1,30 +1,86 @@
 {
-  "leaf of life": {
-    "display_name": "Leaf of Life",
+  "life_stone": {
+    "display_name": "Life Stone",
     "rarity": "common",
-    "value": 5,
+    "value": 50,
     "stackable": true,
-    "description": "A fragrant green leaf said to heal minor wounds."
+    "description": "Una pequeña piedra de energía vital cristalizada. A los demonios les encantan."
   },
-  "odd morsel": {
-    "display_name": "Odd Morsel",
+  "medicine": {
+    "display_name": "Medicine",
     "rarity": "common",
-    "value": 2,
+    "value": 100,
     "stackable": true,
-    "description": "Strange food; demons might like it."
+    "description": "Medicina básica. Restaura una pequeña cantidad de HP."
   },
-  "holy water": {
-    "display_name": "Holy Water",
+  "dis_poison": {
+    "display_name": "Dis-Poison",
+    "rarity": "common",
+    "value": 150,
+    "stackable": true,
+    "description": "Cura el estado de Veneno."
+  },
+  "chakra_drop": {
+    "display_name": "Chakra Drop",
     "rarity": "uncommon",
-    "value": 15,
+    "value": 500,
     "stackable": true,
-    "description": "Purified water that wards off darkness."
+    "description": "Restaura una pequeña cantidad de MP. Útil en negociaciones largas."
   },
-  "rusted coin": {
-    "display_name": "Rusted Coin",
-    "rarity": "common",
-    "value": 1,
+  "revival_bead": {
+    "display_name": "Revival Bead",
+    "rarity": "uncommon",
+    "value": 600,
     "stackable": true,
-    "description": "Old currency. Sometimes useful for bargains."
+    "description": "Revive a un aliado inconsciente con poca salud."
+  },
+  "muscle_drink": {
+    "display_name": "Muscle Drink",
+    "rarity": "uncommon",
+    "value": 300,
+    "stackable": true,
+    "description": "Recupera mucha salud, pero tiene efectos secundarios impredecibles."
+  },
+  "bead": {
+    "display_name": "Bead",
+    "rarity": "rare",
+    "value": 2000,
+    "stackable": true,
+    "description": "Cuenta sagrada que restaura todo el HP de un aliado."
+  },
+  "amethyst": {
+    "display_name": "Amethyst",
+    "rarity": "rare",
+    "value": 1500,
+    "stackable": true,
+    "description": "Una gema púrpura brillante. Muy codiciada por demonios femeninos."
+  },
+  "chakra_pot": {
+    "display_name": "Chakra Pot",
+    "rarity": "rare",
+    "value": 2500,
+    "stackable": true,
+    "description": "Restaura completamente el MP de un aliado."
+  },
+  "balm_of_life": {
+    "display_name": "Balm of Life",
+    "rarity": "epic",
+    "value": 5000,
+    "stackable": true,
+    "description": "Revive a un aliado con salud completa."
+  },
+  "bead_chain": {
+    "display_name": "Bead Chain",
+    "rarity": "epic",
+    "value": 4500,
+    "stackable": true,
+    "description": "Restaura todo el HP de todo el equipo."
+  },
+  "soma": {
+    "display_name": "Soma",
+    "rarity": "legendary",
+    "value": 10000,
+    "stackable": true,
+    "description": "Néctar divino. Restaura completamente HP y MP de un aliado. Extremadamente raro."
   }
 }

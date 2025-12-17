@@ -1,81 +1,76 @@
 {
-  "ev_ask_gold_small": {
+  "beg_macca_small": {
     "type": "ask_gold",
+    "amount": 50,
+    "text": "Tengo necesidades terrenales. Dame algo de Macca.",
+    "success_rapport": 10,
+    "fail_rapport": -5,
+    "refuse_rapport": -2
+  },
+  "beg_macca_large": {
+    "type": "ask_gold",
+    "amount": 200,
+    "text": "Si quieres mi ayuda, tendrás que pagar. Y no soy barato.",
+    "success_rapport": 15,
+    "fail_rapport": -10,
+    "refuse_rapport": -5
+  },
+  "beg_item_common": {
+    "type": "ask_item",
+    "target_rarity": "COMMON",
+    "quantity": 1,
+    "text": "¡Tengo hambre! Dame algo sencillo para masticar.",
+    "success_rapport": 10,
+    "fail_rapport": -5
+  },
+  "beg_item_rare": {
+    "type": "ask_item",
+    "target_rarity": "RARE",
+    "quantity": 1,
+    "text": "Percibo que llevas objetos valiosos. Dame uno raro, si eres digno.",
+    "success_rapport": 20,
+    "fail_rapport": -10
+  },
+  "trap_simple": {
+    "type": "trap",
+    "damage_rapport": 10,
+    "text": "¡Jaja! ¡Bajaste la guardia!",
+    "fail_rapport": 0
+  },
+  "demand_blood": {
+    "type": "ask_hp",
     "amount": 5,
-    "pay_rapport": 2,
-    "refuse_rapport": 1,
-    "flee_on_refuse": false,
-    "join_on_pay": false,
-    "message": "Te pide 5 monedas a cambio de buena voluntad."
+    "text": "No me interesa tu dinero. Quiero tu esencia vital (HP).",
+    "success_rapport": 15,
+    "refuse_rapport": -5
   },
-  "ev_ask_gold_medium": {
-    "type": "ask_gold",
+  "mystery_box": {
+    "type": "gamble",
+    "amount": 100,
+    "text": "Hagamos algo divertido. Dame Macca y quizás te dé algo bueno... o nada.",
+    "success_rapport": 5,
+    "fail_rapport": -5
+  },
+  "beg_hp_small": {
+    "type": "ask_hp",
     "amount": 10,
-    "pay_rapport": 2,
-    "refuse_rapport": 1,
-    "flee_on_refuse": false,
-    "join_on_pay": false,
-    "message": "Exige 10 monedas para tomarte en serio."
+    "text": "Estoy herido... necesito tu fuerza vital. ¿Me das un poco?",
+    "success_rapport": 15,
+    "refuse_rapport": -5
   },
-  "ev_ask_gold_bribe_join": {
-    "type": "ask_gold",
-    "amount": 20,
-    "pay_rapport": 2,
-    "refuse_rapport": 2,
-    "flee_on_refuse": false,
-    "join_on_pay": true,
-    "message": "Promete unirse si pagas 20 monedas ahora mismo."
+  "beg_mp_small": {
+    "type": "ask_mp",
+    "amount": 5,
+    "text": "Siento un gran poder mágico en ti. Comparte tu Mana conmigo.",
+    "success_rapport": 10,
+    "fail_rapport": -5,
+    "refuse_rapport": -2
   },
-  "ev_ask_item_leaf": {
-    "type": "ask_item",
-    "item": "leaf of life",
-    "amount": 1,
-    "consume": true,
-    "give_rapport": 2,
-    "decline_rapport": 0,
-    "join_on_give": false,
-    "message": "Te pide 1x Leaf of Life como ofrenda."
-  },
-  "ev_ask_item_morsel": {
-    "type": "ask_item",
-    "item": "odd morsel",
-    "amount": 1,
-    "consume": true,
-    "give_rapport": 1,
-    "decline_rapport": 0,
-    "join_on_give": false,
-    "message": "Quiere probar un Odd Morsel."
-  },
-  "ev_ask_item_holy": {
-    "type": "ask_item",
-    "item": "holy water",
-    "amount": 1,
-    "consume": true,
-    "give_rapport": 2,
-    "decline_rapport": 1,
-    "join_on_give": false,
-    "message": "Exige 1x Holy Water para purificar el trato."
-  },
-  "ev_ask_item_coin_bribe": {
-    "type": "ask_item",
-    "item": "rusted coin",
-    "amount": 3,
-    "consume": true,
-    "give_rapport": 1,
-    "decline_rapport": 0,
-    "join_on_give": false,
-    "message": "Pide 3x Rusted Coin como 'peaje'."
-  },
-  "ev_trap_mock": {
-    "type": "trap",
-    "penalty_rapport": 2,
-    "flee_chance": 0.25,
-    "message": "Era una pregunta trampa; se ofende con tus burlas."
-  },
-  "ev_trap_pride": {
-    "type": "trap",
-    "penalty_rapport": 1,
-    "flee_chance": 0.10,
-    "message": "Se siente insultado por tu falta de respeto."
+  "vampire_kiss": {
+    "type": "ask_hp",
+    "amount": 25,
+    "text": "Tu cuello se ve delicioso... Solo un trago, ¿por favor?",
+    "success_rapport": 25,
+    "refuse_rapport": -10
   }
 }

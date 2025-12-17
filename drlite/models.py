@@ -13,6 +13,13 @@ class Personality(Enum):
     CUNNING = "CUNNING"
     PROUD = "PROUD"
 
+class Rarity(Enum):
+    COMMON = auto()
+    UNCOMMON = auto()
+    RARE = auto()
+    EPIC = auto()
+    LEGENDARY = auto()
+
 @dataclass(slots=True)
 class Alignment:
     """Aligment axis: LC (Law/Chaos), LD (Light/Dak)"""
@@ -54,6 +61,8 @@ class Demon:
     name: str
     alignment: Alignment
     personality: Personality
+    rarity: Rarity
+    description: str = ""
     patience: int = 4
     tolerance: int = 3
     rapport_needed: int = 2
@@ -94,6 +103,20 @@ class Demon:
 
 @dataclass(slots=True, eq=False)
 class Player:
+
+    # Progress
+    name: str = "Nahobino"
+    lvl: int = 1
+    exp: int = 0
+    exp_next: int = 100
+
+    # HP/MP
+    hp: int = 50
+    max_hp: int = 50
+    mp: int = 20
+    max_mp: int = 20
+
+    # Economy and Alignment
     core_alignment: Alignment = field(default_factory=lambda: Alignment(0, 0))
     stance_alignment: Alignment = field(default_factory=lambda: Alignment(0, 0))
     roster: List[Demon] = field(default_factory=list)
@@ -150,6 +173,86 @@ class Player:
     def count_item(self, item_id: str) -> int:
         """Return current quantity for item_id."""
         return self.inventory.get(item_id, 0)
+
+    def has_demon(self, demon_id: str) -> bool:
+        """
+        Checks if a specific demon ID is already in the player's roster.
+        """
+        for d in self.roster:
+            if d.id == demon_id:
+                return True
+        return False
+
+    def change_gold(self, amount: int) -> int:
+        """Modifica el oro del jugador. No permite negativos."""
+        self.gold += amount
+        if self.gold < 0: self.gold = 0
+        return self.gold
+
+    def change_hp(self, amount: int) -> int:
+        """Modify HP, returns new HP"""
+        self.hp += amount
+        if self.hp > self.max_hp: self.hp = self.max_hp
+        # No capeamos a 0 aquí para detectar la muerte fuera
+        return self.hp
+
+    def change_mp(self, amount: int) -> int:
+        """Modify MP, returns new MP"""
+        self.mp += amount
+        if self.mp < 0: self.mp = 0
+        if self.mp > self.max_mp: self.mp = self.max_mp
+        return self.mp
+
+    def gain_exp(self, amount: int) -> bool:
+        """
+        Exp gain, returns true if LvlUP.
+        """
+        self.exp += amount
+        if self.exp >= self.exp_next:
+            self._level_up()
+            return True
+        return False
+
+    def _level_up(self):
+        """Grows and reset HP/MP."""
+        self.lvl += 1
+        self.exp -= self.exp_next
+        
+        # Simple EXP curve (lvl*100)
+        self.exp_next = self.lvl * 100
+        
+        # Stats increment
+        self.max_hp += 15
+        self.max_mp += 5
+        
+        # Post-Lvlup Healing
+        self.hp = self.max_hp
+        self.mp = self.max_mp
+
+
+    def apply_death_penalty(self) -> str:
+        """
+        Death Logic:
+        - Si Lvl > 1: Baja 1 nivel, resetea stats al nuevo max.
+        - Si Lvl == 1: Game Over real (o reset de XP).
+        """
+        if self.lvl > 1:
+            self.lvl -= 1
+            # Stats down
+            self.max_hp -= 15
+            self.max_mp -= 5
+            # Reset EXP
+            self.exp = 0 
+            self.exp_next = self.lvl * 100
+            # Ress
+            self.hp = self.max_hp
+            self.mp = self.max_mp
+            return "LEVEL_DOWN"
+        else:
+            # Lvl1 Death
+            self.hp = self.max_hp # You're born again
+            self.exp = 0
+            return "GAME_OVER"
 
 @dataclass
 class EventResult:
