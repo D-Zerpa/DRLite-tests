@@ -1,6 +1,6 @@
 from __future__ import annotations
 from typing import TypedDict, Literal, NotRequired, List, Dict, Any
-from drlite.models import Rarity
+from drlite.models import Rarity, ItemEffect
 
 class EventPayload(TypedDict, total=False):
     type: Literal["ask_gold", "ask_item", "trap", "whim"]
@@ -41,3 +41,6 @@ class ItemDef(TypedDict, total=False):
     value: int
     stackable: bool
     description: str
+    effect_type: ItemEffect = ItemEffect.NONE
+    effect_amount: int = 0
+    consumable: bool = True

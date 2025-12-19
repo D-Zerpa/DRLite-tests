@@ -1,60 +1,19 @@
 {
-  "base_chance": 0.25,
-  "comment": "Probabilidad base de 25% por turno de que ocurra un evento.",
-  
-  "personality_mod": {
-    "UPBEAT": 1.2,
-    "TIMID": 0.8,
-    "IRRITABLE": 1.5,
-    "GLOOMY": 1.0,
-    "CUNNING": 1.1
-  },
-  
-  "entries": [
-    { 
-      "id": "beg_macca_small", 
-      "weight": 30,
-      "note": "Lo más común: pedir un poco de dinero."
-    },
-    { 
-      "id": "beg_item_common", 
-      "weight": 25,
-      "note": "Pide items comunes (Life Stone, Medicine)."
-    },
-    { 
-      "id": "beg_mp_small", 
-      "weight": 20,
-      "note": "Pide energía mágica. Costo bajo, recuperable."
-    },
-    { 
-      "id": "beg_hp_small", 
-      "weight": 15,
-      "note": "Pide un poco de vida. Agrega tensión."
-    },
-    { 
-      "id": "mystery_box", 
-      "weight": 15,
-      "note": "Minijuego de apuesta (Gamble)."
-    },
-    { 
-      "id": "trap_simple", 
-      "weight": 10,
-      "note": "Daño directo a la afinidad."
-    },
-    { 
-      "id": "beg_macca_large", 
-      "weight": 5,
-      "note": "Pide mucho dinero. Raro."
-    },
-    { 
-      "id": "beg_item_rare", 
-      "weight": 5,
-      "note": "Pide items raros (Bead, Amethyst). Muy exigente."
-    },
-    { 
-      "id": "vampire_kiss", 
-      "weight": 2,
-      "note": "Drenaje masivo de HP. Muy raro pero peligroso."
+  "config": {
+    "base_chance": 0.25,
+    "personality_mod": {
+      "UPBEAT": 0.10,
+      "GLOOMY": -0.05,
+      "IRRITABLE": 0.05,
+      "CUNNING": 0.15
     }
+  },
+  "templates": [
+    { "id": "beg_macca_universal", "weight": 30 },
+    { "id": "beg_item_universal", "weight": 20 },
+    { "id": "beg_hp_universal", "weight": 15 },
+    { "id": "beg_mp_universal", "weight": 15 },
+    { "id": "gamble_universal", "weight": 10 },
+    { "id": "threat_blood", "weight": 5 }
   ]
 }

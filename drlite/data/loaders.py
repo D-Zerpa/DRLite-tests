@@ -1,297 +1,180 @@
-from __future__ import annotations
-from typing import List, Dict, Any
-import json, os
+import json
+import os
+from typing import List, Dict, Any, Tuple
+from drlite.data.types import ItemDef
+from drlite.models import (
+    Demon, Question, Rarity, 
+    Alignment, Personality, ItemEffect
+)
 
-from drlite.models import Demon, Alignment, Question, Personality
-from drlite.utils import canonical_slug, coerce_int, canonical_item_id, ensure_list_of_str
-from drlite.data.types import ItemDef, Effect, Rarity
-
+def load_json(path: str) -> Any:
+    if not os.path.exists(path):
+        print(f"[Warning] File not found: {path}")
+        return {}
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except json.JSONDecodeError as e:
+        print(f"[Error] Failed to parse JSON {path}: {e}")
+        return {}
 
 # ==============================================================================
-#  HELPERS
-# ==============================================================================
-
-def _parse_alignment(raw_val: Any) -> Alignment:
-    if isinstance(raw_val, dict):
-        return Alignment(int(raw_val.get("law_chaos", 0)), int(raw_val.get("light_dark", 0)))
-    if isinstance(raw_val, (list, tuple)) and len(raw_val) >= 2:
-        return Alignment(int(raw_val[0]), int(raw_val[1]))
-    return Alignment(0, 0)
-
-# ==============================================================================
-#  LOADERS
+#  DEMONS
 # ==============================================================================
 
 def load_demons(path: str) -> List[Demon]:
-    """
-    Load demons from JSON:
-    """
-    if not os.path.exists(path):
-        raise FileNotFoundError(f"Demons file not found: {path}")
+    data = load_json(path)
+    if not isinstance(data, list):
+        if isinstance(data, dict):
+            data = list(data.values())
+        else:
+            print(f"[Error] demons.json must be a list. Loaded empty.")
+            return []
 
-    with open(path, "r", encoding="utf-8") as f:
-        raw = json.load(f)
-
-    demons: List[Demon] = []
-    if not isinstance(raw, list):
-        raise ValueError("demons.json must contain a list of demons.")
-
-    for i, item in enumerate(raw, start=1):
+    demons = []
+    for d_data in data:
         try:
-            name = str(item["name"])
-            did = str(item.get("id") or _canonical_demon_id(name))
-            al = item.get("alignment", {})
-            lc = coerce_int(al.get("law_chaos", 0))
-            ld = coerce_int(al.get("light_dark", 0))
-            align = Alignment(law_chaos=lc, light_dark=ld)
-            r_str = str(item.get("rarity", "COMMON")).upper()
-            r_enum = getattr(Rarity, r_str, Rarity.COMMON)
+            # Parse Rarity Enum safely (Handle lowercase inputs like "common")
+            r_str = d_data.get("rarity", "COMMON").upper()
+            rarity = getattr(Rarity, r_str, Rarity.COMMON)
 
-            personality = _parse_personality(item.get("personality", "PLAYFUL"))
-            patience = coerce_int(item.get("patience", 4), 4)
-            tolerance = coerce_int(item.get("tolerance", 3), 3)
-            rapport_needed = coerce_int(item.get("rapport_needed", 2), 2)
+            # Parse Personality Enum safely (Handle "PLAYFUL" etc.)
+            p_str = d_data.get("personality", "DEFAULT").upper()
+            personality = getattr(Personality, p_str, Personality.DEFAULT)
 
-            demons.append(
-                Demon(
-                    id=did,
-                    name=name,
-                    alignment=align,
-                    personality=personality,
-                    rarity=r_enum,
-                    patience=patience,
-                    tolerance=tolerance,
-                    rapport_needed=rapport_needed,
-                )
+            # Parse Alignment
+            align_data = d_data.get("alignment", {})
+            alignment = Alignment(
+                law_chaos=align_data.get("law_chaos", 0),
+                light_dark=align_data.get("light_dark", 0)
             )
-        except Exception as e:
-            raise ValueError(f"Invalid demon at index {i}: {e}") from e
 
+            demon = Demon(
+                id=d_data["id"],
+                dex_no=d_data.get("dex_no", 0),
+                name=d_data["name"],
+                aliases=d_data.get("aliases", []),
+                rarity=rarity,
+                description=d_data.get("description", "A mysterious demon."),
+                personality=personality,
+                alignment=alignment,
+                patience=d_data.get("patience", 5),
+                tolerance=d_data.get("tolerance", 3),
+                rapport_needed=d_data.get("rapport_needed", 30),
+                sprite_source=d_data.get("sprite_source", ""),
+                sprite_key=d_data.get("sprite_key", "")
+            )
+            demons.append(demon)
+        except Exception as e:
+            print(f"[Error] Skipping demon {d_data.get('name', 'Unknown')}: {e}")
+    
+    print(f"[Demons] Loaded {len(demons)} demons.")
     return demons
+
+# ==============================================================================
+#  QUESTIONS
+# ==============================================================================
 
 def load_questions(path: str) -> List[Question]:
     """
-    Load questions from JSON:
-    [
-      {
-        "id": "...",
-        "text": "...",
-        "tags": ["..."],
-        "choices": {
-           "Option label": {"dLC":0,"dLD":1,"dRapport":1,"tags":["..."]},
-           ...
-        }
-      }, ...
-    ]
+    Loads questions from a JSON Dictionary or List.
+    Structure: { "q_id": { "text": "...", "choices": {...} } }
     """
-    # Allow singular/plural fallback if you wish
-    if not os.path.exists(path):
-        alt = path.replace("question.json", "questions.json")
-        if os.path.exists(alt):
-            path = alt
-        else:
-            raise FileNotFoundError(f"Questions file not found: {path}")
+    data = load_json(path)
+    questions = []
 
-    with open(path, "r", encoding="utf-8") as f:
-        raw = json.load(f)
+    raw_list = []
+    if isinstance(data, dict):
+        raw_list = list(data.values())
+    elif isinstance(data, list):
+        raw_list = data
+    else:
+        print("[Error] questions.json must be a dict or list.")
+        return []
 
-    if not isinstance(raw, list):
-        raise ValueError("questions.json must contain a list of questions.")
-
-    questions: List[Question] = []
-    for i, q in enumerate(raw, start=1):
+    for q_data in raw_list:
         try:
-            qid = str(q["id"])
-            text = str(q["text"])
-            tags = ensure_list_of_str(q.get("tags", []))
+            responses = []
+            raw_choices = q_data.get("choices", {})
+            
+            # Convert choice dict to list of tuples
+            for choice_text, choice_stats in raw_choices.items():
+                responses.append((choice_text, choice_stats))
 
-            choices_raw = q.get("choices", {})
-            if not isinstance(choices_raw, dict) or not choices_raw:
-                raise ValueError("choices must be a non-empty object.")
-
-            # Normalize effects
-            norm_choices: Dict[str, Effect] = {}
-            for label, eff in choices_raw.items():
-                if not isinstance(eff, dict):
-                    raise ValueError(f"choice '{label}' must be an object with dLC/dLD/dRapport.")
-                norm_choices[str(label)] = Effect(
-                    dLC=coerce_int(eff.get("dLC", 0)),
-                    dLD=coerce_int(eff.get("dLD", 0)),
-                    dRapport=coerce_int(eff.get("dRapport", 0)),
-                    tags=ensure_list_of_str(eff.get("tags", [])),
-                )
-
-            questions.append(Question(id=qid, text=text, tags=tags, choices=norm_choices))
-
+            q = Question(
+                id=q_data.get("id", "unknown"),
+                text=q_data["text"],
+                responses=responses,
+                tags=q_data.get("tags", [])
+            )
+            questions.append(q)
         except Exception as e:
-            raise ValueError(f"Invalid question at index {i}: {e}") from e
+            print(f"[Error] Skipping question {q_data.get('id')}: {e}")
 
+    print(f"[Questions] Loaded {len(questions)} questions.")
     return questions
 
-def load_personality_weights(path: str = "data/personality_weights.json") -> None:
-    """
-    Load personality tag weights and RETURN them.
-    """
+# ==============================================================================
+#  ITEMS
+# ==============================================================================
 
-    if not os.path.exists(path):
-        print(f"[weights] {path} not found. Returning empty weights.")
-        return {}
+def load_item_catalog(path: str) -> Dict[str, ItemDef]:
+    data = load_json(path)
+    catalog = {}
+    
+    raw_items = data if isinstance(data, dict) else {i["id"]: i for i in data}
 
-    with open(path, "r", encoding="utf-8") as f:
-        raw = json.load(f)
-
-    if not isinstance(raw, dict):
-        raise ValueError("personality_weights.json must be a JSON object mapping personality -> tag map.")
-
-    weights: Dict[str, Dict[str, int]] = {}
-    for p_name, tagmap in raw.items():
-        if not isinstance(tagmap, dict):
-            raise ValueError(f"Invalid tag map for personality {p_name!r}: must be an object.")
-
-        # Map string to Personality enum (case-insensitive)
+    for item_id, i_data in raw_items.items():
         try:
-            p = Personality[p_name.strip().upper()]
-        except KeyError as e:
-            raise ValueError(f"Unknown personality name: {p_name!r}") from e
-
-        inner: dict[str, int] = {}
-        for tag, val in tagmap.items():
-            try:
-                v = int(val)
-            except (TypeError, ValueError):
-                raise ValueError(f"Weight for tag {tag!r} under {p_name!r} must be an integer.")
-            # Clamp to [-2, 2]
-            if v < -2: v = -2
-            if v >  2: v =  2
-            inner[str(tag).lower()] = v  # normalize tag key to lowercase
-
-        p_key = p_name.strip().upper() 
-        weights[p_key] = {str(k).lower(): int(v) for k, v in tagmap.items()}
-
-    print(f"[weights] Loaded weights for {len(weights)} personalities.")
-    return weights
-
-def load_item_catalog(path: str = "data/items.json") -> Dict[str, ItemDef]:
-    if not os.path.exists(path):
-        print(f"[items] Items not found on {path}")
-        return {}
-
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            raw = json.load(f)
-
-        catalog = {}
-        for raw_key, meta in raw.items():
-            key = raw_key.lower() 
+            r_str = i_data.get("rarity", "COMMON").upper()
+            rarity = getattr(Rarity, r_str, Rarity.COMMON)
             
-            r_str = str(meta.get("rarity", "COMMON")).upper()
-            r_enum = getattr(Rarity, r_str, Rarity.COMMON)
+            eff_str = i_data.get("effect_type", "NONE").upper()
+            eff_type = getattr(ItemEffect, eff_str, ItemEffect.NONE)
 
-            catalog[key] = ItemDef(
-                display_name=str(meta.get("display_name") or raw_key.title()),
-                rarity=r_enum,
-                value=int(meta.get("value", 0)),
-                stackable=bool(meta.get("stackable", True)),
-                description=str(meta.get("description", "")),
+            item = ItemDef(
+                id=item_id, 
+                display_name=i_data.get("display_name", item_id),
+                description=i_data.get("description", ""),
+                rarity=rarity,
+                base_value=i_data.get("value", 10),
+                consumable=i_data.get("consumable", False),
+                effect_type=eff_type,
+                effect_amount=i_data.get("effect_amount", 0)
             )
-        
-        print(f"[Items] Loaded {len(catalog)} items.")
-        return catalog
-    except Exception as e:
-        print(f"[Items] Error: {e}")
-        return {}
+            catalog[item_id] = item
+        except Exception as e:
+            print(f"[Error] Skipping item {item_id}: {e}")
 
-    
-    
+    print(f"[Items] Loaded {len(catalog)} items.")
+    return catalog
 
-def load_events(path: str = "data/events.json"):
-    """Load and RETURN event catalog."""
-    if not os.path.exists(path):
-        print(f"[events] {path} not found. Loaded empty registry.")
-        return {}
+# ==============================================================================
+#  EVENTS & CONFIG
+# ==============================================================================
 
-    with open(path, "r", encoding="utf-8") as f:
-        data = json.load(f)
+def load_events(path: str) -> Dict[str, Any]:
+    data = load_json(path)
     if not isinstance(data, dict):
-        raise ValueError("events.json must be an object mapping id -> event payload.")
-
-    # normalize a bit (clamp ranges later if needed)
-    events = {str(k): v for k, v in data.items()}
-
-    return events
-    print(f"[events] Loaded {len(events)} events.")
-
-
-def load_whims(path: str = "data/whims.json"):
-    """Load whim config and templates."""
-    if not os.path.exists(path):
-        print(f"[whims] {path} not found. Whims disabled.")
-        return {}, []
-
-    with open(path, "r", encoding="utf-8") as f:
-        data = json.load(f)
-
-    if not isinstance(data, dict):
-        raise ValueError("whims.json must be an object with base_chance, personality_mod, entries[].")
-
-    whim_config = {
-        "base_chance": float(data.get("base_chance", 0.0)),
-        "personality_mod": {str(k).upper(): float(v) for k, v in data.get("personality_mod", {}).items()},
-    }
-    entries = data.get("entries", [])
-    if not isinstance(entries, list):
-        raise ValueError("whims.json 'entries' must be a list.")
-
-    norm_entries: List[EventPayload] = []
-    for e in entries:
-        if not isinstance(e, dict):
-            continue
-        e = dict(e)
-        e["type"] = str(e.get("type", "")).lower()  # ask_gold/ask_item
-        e["id"] = str(e.get("id", ""))
-        e["weight"] = int(e.get("weight", 1))
-        norm_entries.append(e)  # we keep validation light for now
-
-    whim_templates = norm_entries
-
-    print(f"[whims] Loaded {len(whim_templates)} whim templates.")
-    return whim_config, whim_templates
-
-def load_personality_cues(path: str = "data/personality_cues.json") -> None:
-    """Load and RETURN personality cues catalog."""
-
-    if not os.path.exists(path):
-        print(f"[cues] {path} not found. Using default emoji-only cues.")
+        print("[Error] events.json must be a dictionary.")
         return {}
+    print(f"[Events] Loaded {len(data)} event definitions.")
+    return data
 
-    with open(path, "r", encoding="utf-8") as f:
-        raw = json.load(f)
+def load_whims(path: str) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
+    data = load_json(path)
+    config = data.get("config", {})
+    templates = data.get("templates", [])
+    print(f"[Whims] Loaded {len(templates)} whim templates.")
+    return config, templates
 
-    if not isinstance(raw, dict):
-        raise ValueError("personality_cues.json must be an object mapping personality -> {tone: cue}.")
+def load_personality_weights(path: str) -> Dict[str, Dict[str, float]]:
+    data = load_json(path)
+    print(f"[weights] Loaded weights for {len(data)} personalities.")
+    return data
 
-    # Normalize personality keys to upper-case names
-    table: Dict[str, Dict[str, str]] = {}
-    for pname, tones in raw.items():
-        if not isinstance(tones, dict):
-            raise ValueError(f"Cues for '{pname}' must be an object.")
-        table[str(pname).strip().upper()] = {str(k): str(v) for k, v in tones.items()}
-
-    total = sum(len(v) for v in table.values())
-    print(f"[cues] Loaded {total} cues across {len(table)} personalities.")
-    return table
-
-def _parse_personality(val: Any) -> Personality:
-    """Normalize personality from JSON (string or enum-like) to Personality enum."""
-    if isinstance(val, Personality):
-        return val
-    if isinstance(val, str):
-        key = val.strip().upper()
-        try:
-            return Personality[key]
-        except KeyError:
-            # Accept values already equal to enum.value
-            for p in Personality:
-                if p.value.upper() == key:
-                    return p
-    raise ValueError(f"Invalid personality value: {val!r}")
+def load_personality_cues(path: str) -> Dict[str, List[str]]:
+    data = load_json(path)
+    total = sum(len(v) for v in data.values())
+    print(f"[cues] Loaded {total} cues across {len(data)} personalities.")
+    return data

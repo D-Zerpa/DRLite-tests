@@ -1,76 +1,87 @@
 {
-  "beg_macca_small": {
-    "type": "ask_gold",
-    "amount": 50,
-    "text": "Tengo necesidades terrenales. Dame algo de Macca.",
-    "success_rapport": 10,
-    "fail_rapport": -5,
-    "refuse_rapport": -2
-  },
-  "beg_macca_large": {
-    "type": "ask_gold",
-    "amount": 200,
-    "text": "Si quieres mi ayuda, tendrás que pagar. Y no soy barato.",
-    "success_rapport": 15,
-    "fail_rapport": -10,
-    "refuse_rapport": -5
-  },
-  "beg_item_common": {
-    "type": "ask_item",
-    "target_rarity": "COMMON",
-    "quantity": 1,
-    "text": "¡Tengo hambre! Dame algo sencillo para masticar.",
-    "success_rapport": 10,
-    "fail_rapport": -5
-  },
-  "beg_item_rare": {
-    "type": "ask_item",
-    "target_rarity": "RARE",
-    "quantity": 1,
-    "text": "Percibo que llevas objetos valiosos. Dame uno raro, si eres digno.",
-    "success_rapport": 20,
-    "fail_rapport": -10
-  },
-  "trap_simple": {
-    "type": "trap",
-    "damage_rapport": 10,
-    "text": "¡Jaja! ¡Bajaste la guardia!",
-    "fail_rapport": 0
-  },
-  "demand_blood": {
-    "type": "ask_hp",
-    "amount": 5,
-    "text": "No me interesa tu dinero. Quiero tu esencia vital (HP).",
-    "success_rapport": 15,
-    "refuse_rapport": -5
-  },
-  "mystery_box": {
-    "type": "gamble",
+  "beg_macca_universal": {
+    "id": "beg_macca_universal",
+    "type": "ask_pay",
+    "text": {
+        "DEFAULT": "El dinero mueve el mundo. Paga la tarifa si quieres mi atención.",
+        "GLOOMY": "Supongo que el dinero podría alegrarme un poco... ¿tienes?",
+        "AGGRESSIVE": "¡Vacia tus bolsillos ahora mismo o te rajo!",
+        "UPBEAT": "¡Oye! ¡Vamos a comprarnos algo bonito! ¿Me das Macca?"
+    },
     "amount": 100,
-    "text": "Hagamos algo divertido. Dame Macca y quizás te dé algo bueno... o nada.",
-    "success_rapport": 5,
-    "fail_rapport": -5
+    "success_msg": {
+        "DEFAULT": "Sabia decisión.",
+        "GLOOMY": "Gracias... aunque al final todos moriremos igual.",
+        "AGGRESSIVE": "¡Jaja! ¡Más te valía!",
+        "UPBEAT": "¡Genial! ¡Eres el mejor!"
+    },
+    "fail_msg": {
+        "DEFAULT": "¿Sin dinero? No me hagas perder el tiempo.",
+        "GLOOMY": "Ah, vale... supongo que no me merezco nada...",
+        "AGGRESSIVE": "¿¡Te burlas de mí!? ¡Te vas a arrepentir!",
+        "UPBEAT": "Jo... qué aguafiestas eres."
+    },
+    "reward_rapport": 15,
+    "penalty_rapport": -10
   },
-  "beg_hp_small": {
+  "beg_hp_universal": {
+    "id": "beg_hp_universal",
     "type": "ask_hp",
-    "amount": 10,
-    "text": "Estoy herido... necesito tu fuerza vital. ¿Me das un poco?",
-    "success_rapport": 15,
-    "refuse_rapport": -5
+    "text": "Me muero de hambre... Tu fuerza vital huele deliciosa. ¿Me das un poco?",
+    "amount": 15,
+    "success_msg": "Ah... eso ha estado delicioso.",
+    "fail_msg": {
+        "DEFAULT": "¡Egoísta! ¡Ojalá te pudras!",
+        "GLOOMY": "Ah, vale... igual me quería morir de hambre...",
+        "IRRITABLE": "¿¡Me niegas comida!? ¡Maldita sea!",
+        "CUNNING": "Je, guardando tu sangre... inteligente, pero grosero."
+    },
+    "reward_rapport": 15,
+    "penalty_rapport": -5
   },
-  "beg_mp_small": {
+  "beg_item_universal": {
+    "id": "beg_item_universal",
+    "type": "ask_item",
+    "target_rarity": "DYNAMIC",
+    "amount": 1,
+    "text": "Para tratar con alguien de mi estatus, exijo una ofrenda. Dame {item}.",
+    "success_msg": "Aceptable. Tienes buen gusto.",
+    "fail_msg": "¿Ni siquiera tienes eso? Patético.",
+    "reward_rapport": 20,
+    "penalty_rapport": -10
+  },
+  "beg_mp_universal": {
+    "id": "beg_mp_universal",
     "type": "ask_mp",
-    "amount": 5,
-    "text": "Siento un gran poder mágico en ti. Comparte tu Mana conmigo.",
-    "success_rapport": 10,
-    "fail_rapport": -5,
-    "refuse_rapport": -2
+    "text": "Mi energía espiritual se agota. Comparte tu Mana conmigo.",
+    "amount": 10,
+    "success_msg": "Refrescante... Gracias.",
+    "fail_msg": "Qué tacaño eres con tu magia.",
+    "reward_rapport": 15,
+    "penalty_rapport": -5
   },
-  "vampire_kiss": {
+  "gamble_universal": {
+    "id": "gamble_universal",
+    "type": "gamble",
+    "text": "Todo esto es muy aburrido. ¿Apostamos Macca? Si ganas te doy algo bueno.",
+    "amount": 150,
+    "success_msg": "¡Maldición! ¡Ganaste! Toma tu premio.",
+    "fail_msg": "¡Jajaja! La casa siempre gana.",
+    "reward_rapport": 10,
+    "penalty_rapport": -5
+  },
+  "threat_blood": {
+    "id": "threat_blood",
     "type": "ask_hp",
-    "amount": 25,
-    "text": "Tu cuello se ve delicioso... Solo un trago, ¿por favor?",
-    "success_rapport": 25,
-    "refuse_rapport": -10
+    "text": {
+        "DEFAULT": "Dame tu sangre ahora o la tomaré por la fuerza.",
+        "TIMID": "P-por favor... necesito sangre... no me obligues a atacar...",
+        "AGGRESSIVE": "¡QUIERO SANGRE! ¡AHORA!"
+    },
+    "amount": 30,
+    "success_msg": "Buena elección. Sigues vivo.",
+    "fail_msg": "Tú lo has querido... ¡Muere!",
+    "reward_rapport": 20,
+    "penalty_rapport": -15
   }
 }

@@ -37,143 +37,121 @@ class DRLiteEncoder(json.JSONEncoder):
 #  Atomic I/O System (Safe Save)
 # ==============================================================================
 
-def get_save_path(user_id: str | int) -> str:
-    """Returns the standardized path for the user's save file."""
-    os.makedirs("saves", exist_ok=True)
-    return f"saves/user_{user_id}.json"
+def get_save_path(user_id: str) -> str:
+    """Returns the absolute path for the save file."""
+    # Ensure directory exists
+    folder = os.path.join("data", "saves")
+    os.makedirs(folder, exist_ok=True)
+    return os.path.join(folder, f"{user_id}.json")
 
-def save_game(user_id: str | int, player: Any, demons_catalog: list, session=None) -> bool:
+def save_game(user_id: str, player: Player, demons_catalog: list, session=None):
     """
-    Saves the game state ATOMICALLY.
-    
-    CRITICAL FIX: Explicitly converts the Player dataclass to a dictionary
-    using `asdict`. This prevents the JSON serializer from writing the 
-    player object as a string string "Player(...)", which causes 
-    loading errors later.
+    Saves the player state to JSON.
     """
-    # Ensure we have the path (assuming this function exists in your scope)
-    final_path = get_save_path(user_id)
-    temp_path = f"{final_path}.tmp"
+    path = get_save_path(user_id)
     
-    # 1. Convert Player Dataclass to Dictionary
-    if is_dataclass(player):
-        player_data = asdict(player)
-    elif isinstance(player, dict):
-        player_data = player
-    else:
-        # Fallback: try to get __dict__ or convert to string (last resort)
-        player_data = getattr(player, "__dict__", str(player))
+    # 1. Serialize Roster (Save IDs only)
+    roster_ids = [d.id for d in player.roster]
 
-    # 2. Extract World State (Demon Availability)
-    # We only save the availability boolean to save space
-    world_data = {d.id: d.available for d in demons_catalog}
+    # 2. Serialize Alignments
+    core_align = {
+        "law_chaos": player.core_alignment.law_chaos,
+        "light_dark": player.core_alignment.light_dark
+    }
+    stance_align = {
+        "law_chaos": player.stance_alignment.law_chaos,
+        "light_dark": player.stance_alignment.light_dark
+    }
 
-    # 3. Construct the Final Data Structure
+    # 3. Data Structure
     data = {
-        "version": 2,
-        "player": player_data,  # This is now a clean Dictionary
-        "world_availability": world_data,
-        "stats": {
-            "session_active": session.in_progress if session else False,
+        "user_id": user_id,
+        "player": {
+            "name": player.name,
+            "lvl": player.lvl,
+            "exp": player.exp,
+            "exp_next": player.exp_next,
+            "hp": player.hp,
+            "max_hp": player.max_hp,
+            "mp": player.mp,
+            "max_mp": player.max_mp,
+            "gold": player.gold,
+            "inventory": player.inventory, # Dict {id: qty} is serializable
+            "core_alignment": core_align,
+            "stance_alignment": stance_align,
+            "roster": roster_ids
         }
     }
 
     try:
-        # Step 4: Write to temp file
-        with open(temp_path, "w", encoding="utf-8") as f:
-            # use default=str to automatically handle Enums (like Personality.UPBEAT)
-            # if they are present inside the dictionary
-            json.dump(data, f, indent=2, default=str)
-            
-            f.flush()            # Force write to buffer
-            os.fsync(f.fileno()) # Force write to physical disk
-
-        # Step 5: Atomic replacement
-        os.replace(temp_path, final_path)
-        print(f"[System] Atomic save successful for user: {user_id}")
-        return True
-
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+        
+        # DEBUG: Imprimimos la ruta absoluta para que sepas dónde está
+        abs_path = os.path.abspath(path)
+        print(f"\n[Sistema] Partida guardada correctamente en:\n -> {abs_path}")
     except Exception as e:
-        print(f"[System] CRITICAL ERROR saving {user_id}: {e}")
-        # Cleanup temp file if it exists
-        if os.path.exists(temp_path):
-            try:
-                os.remove(temp_path)
-            except OSError:
-                pass
-        return False
+        print(f"[Error] No se pudo guardar la partida: {e}")
 
-def load_game(user_id: str | int, demons_catalog: List[Demon]) -> Tuple[Player, List[Demon]]:
+def load_game(user_id: str, demons_catalog: List[Demon]) -> Tuple[Player, List[Demon]]:
     """
-    Loads the game state and reconstructs the Player object with RPG stats.
-    Re-links roster IDs to actual Demon objects from the catalog.
+    Loads player data. If no save exists, returns a NEW Player.
+    Reconstructs Roster objects from IDs using the Catalog.
     """
     path = get_save_path(user_id)
-    
-    # If no save exists, return a fresh player
+
     if not os.path.exists(path):
-        print(f"[System] No save found for {user_id}. Creating new.")
-        return Player(), demons_catalog
+        # New Game
+        return Player(name=user_id), demons_catalog
 
     try:
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
-
-        p_data = data.get("player", {})
-
-        # --- 1. Reconstruct Alignments ---
-        # Helper to convert dict back to Alignment object
-        def parse_align(d: dict) -> Alignment:
-            if not d: return Alignment(0, 0)
-            return Alignment(int(d.get("law_chaos", 0)), int(d.get("light_dark", 0)))
-
-        core_align = parse_align(p_data.get("core_alignment", {}))
-        stance_align = parse_align(p_data.get("stance_alignment", {}))
-
-        # --- 2. Reconstruct Roster ---
-        # Convert saved IDs back into references to the Demon objects in memory
-        roster_objs = []
-        raw_roster = p_data.get("roster", [])
         
-        for item in raw_roster:
-            # Handle if roster is saved as a list of dicts or list of IDs
-            d_id = item.get("id") if isinstance(item, dict) else item
-            
-            # Find the matching demon in the master catalog
-            found_demon = next((d for d in demons_catalog if d.id == d_id), None)
-            if found_demon:
-                roster_objs.append(found_demon)
+        p_data = data["player"]
+        
+        # 1. Reconstruct Alignments
+        c_al = p_data.get("core_alignment", {})
+        s_al = p_data.get("stance_alignment", {})
+        
+        core_obj = Alignment(c_al.get("law_chaos", 0), c_al.get("light_dark", 0))
+        stance_obj = Alignment(s_al.get("law_chaos", 0), s_al.get("light_dark", 0))
 
-        # --- 3. Instantiate Player ---
+        # 2. Reconstruct Roster (ID -> Demon Object)
+        roster_objs = []
+        saved_ids = p_data.get("roster", [])
+        
+        # Map catalog for speed
+        catalog_map = {d.id: d for d in demons_catalog}
+        
+        for d_id in saved_ids:
+            if d_id in catalog_map:
+                # IMPORTANT: In a real game, you might clone this object 
+                # to track individual HP/MP. For Lite, reference is fine.
+                roster_objs.append(catalog_map[d_id])
+        
+        # 3. Create Player
         player = Player(
-            name=str(p_data.get("name", "Nahobino")),
-            
-            # RPG Stats
-            lvl=int(p_data.get("lvl", 1)),
-            exp=int(p_data.get("exp", 0)),
-            exp_next=int(p_data.get("exp_next", 100)),
-            
-            hp=int(p_data.get("hp", 50)),
-            max_hp=int(p_data.get("max_hp", 50)),
-            mp=int(p_data.get("mp", 20)),
-            max_mp=int(p_data.get("max_mp", 20)),
-            
-            # Economy & Inventory
-            gold=int(p_data.get("gold", 0)),
+            name=p_data.get("name", user_id),
+            lvl=p_data.get("lvl", 1),
+            exp=p_data.get("exp", 0),
+            exp_next=p_data.get("exp_next", 100),
+            hp=p_data.get("hp", 50),
+            max_hp=p_data.get("max_hp", 50),
+            mp=p_data.get("mp", 20),
+            max_mp=p_data.get("max_mp", 20),
+            gold=p_data.get("gold", 0),
             inventory=p_data.get("inventory", {}),
-            
-            # Objects
-            core_alignment=core_align,
-            stance_alignment=stance_align,
-            roster=roster_objs
+            roster=roster_objs,
+            core_alignment=core_obj,
+            stance_alignment=stance_obj
         )
-
-        print(f"[System] Save loaded. {player.name} Lv.{player.lvl} (HP {player.hp}/{player.max_hp})")
+        
         return player, demons_catalog
 
     except Exception as e:
-        print(f"[System] Error loading save for {user_id}: {e}")
-        return Player(), demons_catalog
+        print(f"[Error] Save file corrupt or incompatible ({e}). Starting new game.")
+        return Player(name=user_id), demons_catalog
 
 # ==============================================================================
 #  Rehydration Logic (Data -> Objects Translator)

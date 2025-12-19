@@ -1,56 +1,84 @@
 {
-  "PLAYFUL": {
-    "humor": 2,
-    "trick": 1,
-    "kindness": 1,
-    "freedom": 1,
-    "order": -1,
-    "ruthless": -2,
-    "bureaucracy": -1,
-    "discipline": -1,
-    "obedience": -1
+  "DEFAULT": {
+    "DEFAULT": 1.0,
+    "POLITE": 0.5,
+    "RUDE": -0.5
   },
-  "CHILDISH": {
-    "kindness": 2,
-    "play": 2,
-    "humor": 1,
-    "light": 1,
-    "discipline": -2,
-    "corruption": -1,
-    "dark": -1,
-    "greed": -1,
-    "fear": -1
+  "UPBEAT": {
+    "FUN": 2.0,
+    "JOKE": 1.5,
+    "SOCIAL": 1.5,
+    "ENERGY": 1.0,
+    "GLOOMY": -1.5,
+    "BORING": -2.0,
+    "SILENCE": -1.0,
+    "DEATH": -2.0
   },
-  "MOODY": {
-    "dark": 2,
-    "taboo": 1,
-    "pride": 1,
-    "power": 1,
-    "mock": -1,
-    "honor": -1,
-    "virtue": -1,
-    "order": -1
+  "TIMID": {
+    "GENTLE": 2.0,
+    "SAFETY": 1.5,
+    "KIND": 1.5,
+    "QUIET": 1.0,
+    "AGGRESSIVE": -2.0,
+    "LOUD": -1.5,
+    "SCARY": -2.0,
+    "FIGHT": -1.5
+  },
+  "IRRITABLE": {
+    "DIRECT": 1.5,
+    "POWER": 1.5,
+    "FIGHT": 1.0,
+    "AGGRESSIVE": 0.5,
+    "WEAKNESS": -2.0,
+    "JOKE": -1.5,
+    "WASTE_TIME": -2.0,
+    "KIND": -1.0
+  },
+  "GLOOMY": {
+    "SADNESS": 2.0,
+    "DEATH": 1.5,
+    "PHILOSOPHICAL": 1.5,
+    "QUIET": 1.0,
+    "FUN": -2.0,
+    "UPBEAT": -2.0,
+    "HOPE": -1.5,
+    "ENERGY": -1.5
   },
   "CUNNING": {
-    "trick": 2,
-    "cunning": 2,
-    "deal": 1,
-    "stealth": 1,
-    "pragmatism": 1,
-    "honor": -2,
-    "honesty": -1,
-    "virtue": -1,
-    "order": -1
+    "SMART": 2.0,
+    "VALUE": 1.5,
+    "TRICK": 1.5,
+    "MONEY": 1.5,
+    "STUPID": -2.0,
+    "NAIVE": -1.5,
+    "HONESTY": -1.0,
+    "FREE": -1.0
+  },
+  "AGGRESSIVE": {
+    "POWER": 2.0,
+    "CHALLENGE": 1.5,
+    "VIOLENCE": 1.0,
+    "WEAKNESS": -2.0,
+    "COWARD": -2.0,
+    "PEACE": -1.5
+  },
+  "PLAYFUL": {
+    "GAME": 2.0,
+    "FUN": 1.5,
+    "TRICK": 1.5,
+    "JOKE": 1.0,
+    "BORING": -2.0,
+    "SERIOUS": -1.5,
+    "WORK": -1.5
   },
   "PROUD": {
-    "honor": 2,
-    "virtue": 2,
-    "order": 1,
-    "discipline": 1,
-    "strength": 1,
-    "trick": -2,
-    "mock": -1,
-    "chaos": -1,
-    "cunning": -1
+    "HONOR": 2.0,
+    "RESPECT": 1.5,
+    "POWER": 1.0,
+    "ELEGANCE": 1.0,
+    "INSULT": -3.0,
+    "JOKE": -1.0,
+    "DIRTY": -1.5,
+    "WEAKNESS": -1.0
   }
 }

@@ -2,16 +2,23 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import Dict, List, Set, Any, Optional
+from drlite.utils import canonical_item_id
 
 from drlite.config import AXIS_MIN, AXIS_MAX
 
 
 class Personality(Enum):
-    PLAYFUL = "PLAYFUL"
-    CHILDISH = "CHILDISH"
-    MOODY = "MOODY"
-    CUNNING = "CUNNING"
-    PROUD = "PROUD"
+    UPBEAT = auto()
+    TIMID = auto()
+    IRRITABLE = auto()  
+    GLOOMY = auto()
+    CUNNING = auto()    
+    KIND = auto()
+    AGGRESSIVE = auto()
+    PLAYFUL = auto()
+    PROUD = auto()
+    # Fallback
+    DEFAULT = auto()
 
 class Rarity(Enum):
     COMMON = auto()
@@ -19,6 +26,15 @@ class Rarity(Enum):
     RARE = auto()
     EPIC = auto()
     LEGENDARY = auto()
+
+class ItemEffect(Enum):
+    NONE = auto()
+    HEAL_HP = auto()
+    HEAL_MP = auto()
+    FULL_RESTORE = auto()
+    CURE_AILMENT = auto() # For future implementations
+    REVIVE = auto() # For future implementations
+
 
 @dataclass(slots=True)
 class Alignment:
@@ -38,10 +54,11 @@ class Alignment:
 @dataclass(slots=True)
 class Question:
     """Loads the Question from the .json and transforms it into an object"""
-    id: str 
+    id: str
     text: str
-    choices: Dict[str, Effect]
-    tags: List[str]
+    # Format: List[Tuple[ResponseText, StatsDict]]
+    responses: List[Tuple[str, Dict[str, Any]]] 
+    tags: List[str] = field(default_factory=list)
 
 @dataclass(slots=True)
 class ReactionFeedback:
@@ -58,47 +75,18 @@ class ReactionFeedback:
 class Demon:
 
     id: str
+    dex_no: int             
     name: str
-    alignment: Alignment
-    personality: Personality
+    aliases: List[str]       
     rarity: Rarity
-    description: str = ""
-    patience: int = 4
-    tolerance: int = 3
-    rapport_needed: int = 2
-    available: bool = field(default=True, repr=False, compare=False)
-
-
-    def react(self, effect: dict, personality_weights: Dict[str, Dict[str, int]]) -> tuple[int, int]:
-            """
-            Compute the demon's reaction to the chosen option based on provided weights.
-            
-            Args:
-                effect: The effect payload from the chosen option.
-                personality_weights: A dictionary mapping Personality names to tag weights.
-            """
-            # 1. Extract Base dRapport
-            base = int(effect.get("dRapport", 0))
-
-            # 2. Extract Tags
-            tags = effect.get("tags", [])
-            if not isinstance(tags, list):
-                tags = [tags]
-            tags = [str(t).lower() for t in tags]
-
-            # 3. Calculate Bonus based on Personality
-            p_key = self.personality.name # Enum name, e.g. "PLAYFUL"
-            weights = personality_weights.get(p_key, {})
-            
-            bonus = 0
-            for t in tags:
-                bonus += int(weights.get(t, 0))
-
-            # 4. Clamp result
-            total = base + bonus
-            delta_rapport = max(-2, min(2, total))
-            
-            return delta_rapport, 0
+    description: str         
+    personality: Personality
+    alignment: Alignment
+    patience: int            
+    tolerance: int          
+    rapport_needed: int
+    sprite_source: str = "" 
+    sprite_key: str = ""
 
 
 @dataclass(slots=True, eq=False)
@@ -253,6 +241,56 @@ class Player:
             self.hp = self.max_hp # You're born again
             self.exp = 0
             return "GAME_OVER"
+
+    def use_item(self, item_id: str, item_def: ItemDef) -> Tuple[bool, str]:
+        """
+        Attempts to use an item. 
+        Returns (Success, Feedback Message).
+        """
+        # 1. Check possession
+        if not self.has_item(item_id, 1):
+            return False, "You don't have that item."
+
+        # 2. Apply Effect
+        msg = ""
+        used = False
+
+        if item_def.effect_type == ItemEffect.HEAL_HP:
+            if self.hp >= self.max_hp:
+                return False, "Your HP is already full."
+            old_hp = self.hp
+            self.change_hp(item_def.effect_amount)
+            recovered = self.hp - old_hp
+            msg = f"Recovered {recovered} HP."
+            used = True
+
+        elif item_def.effect_type == ItemEffect.HEAL_MP:
+            if self.mp >= self.max_mp:
+                return False, "Your MP is already full."
+            old_mp = self.mp
+            self.change_mp(item_def.effect_amount)
+            recovered = self.mp - old_mp
+            msg = f"Recovered {recovered} MP."
+            used = True
+
+        elif item_def.effect_type == ItemEffect.FULL_RESTORE:
+            if self.hp >= self.max_hp and self.mp >= self.max_mp:
+                return False, "Tu salud y energía ya están al máximo."
+
+            self.hp = self.max_hp
+            self.mp = self.max_mp
+            msg = "¡Tu HP y MP han sido totalmente restaurados!"
+            used = True
+            
+        elif item_def.effect_type == ItemEffect.NONE:
+            msg = "This item cannot be used here."
+            used = False
+
+        # 3. Consume
+        if used and item_def.consumable:
+            self.remove_item(item_id, 1)
+
+        return used, msg
 
 @dataclass
 class EventResult:

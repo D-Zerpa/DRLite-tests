@@ -1,261 +1,195 @@
-from __future__ import annotations
-from typing import List, Dict, Any
 import os
-import textwrap
-from shutil import get_terminal_size
-
-from drlite.config import RAPPORT_MIN, RAPPORT_MAX
-from drlite.models import Demon
-# Try to import asset helper, fail silently if missing (safe for CLI)
-try:
-    from drlite.assets.manifest import get_portrait_path
-except ImportError:
-    get_portrait_path = lambda d: None
+import sys
+from typing import Optional, List
+from drlite.models import Player, Demon, Rarity, Alignment
 
 # ==============================================================================
-#  System Helpers
+#  CONSTANTS & STYLING
 # ==============================================================================
 
-def clear_screen() -> None:
-    """Clears the terminal screen for a cleaner UI experience."""
+COLORS = {
+    "RESET": "\033[0m",
+    "BOLD": "\033[1m",
+    "RED": "\033[91m",
+    "GREEN": "\033[92m",
+    "YELLOW": "\033[93m",
+    "BLUE": "\033[94m",
+    "MAGENTA": "\033[95m",
+    "CYAN": "\033[96m",
+    "WHITE": "\033[97m",
+    "GREY": "\033[90m"
+}
+
+def _style(text: str, color_key: str) -> str:
+    """Applies ANSI color code to text."""
+    code = COLORS.get(color_key.upper(), "")
+    return f"{code}{text}{COLORS['RESET']}"
+
+def _rarity_label(rarity: Rarity) -> str:
+    """Returns a colored string for the rarity."""
+    # Handle both Enum object and string cases for safety
+    r_name = rarity.name if hasattr(rarity, 'name') else str(rarity)
+    
+    # Translate and Colorize
+    if r_name == "COMMON": return _style("COMÚN", "WHITE")
+    if r_name == "UNCOMMON": return _style("POCO COMÚN", "GREEN")
+    if r_name == "RARE": return _style("RARO", "BLUE")
+    if r_name == "EPIC": return _style("ÉPICO", "MAGENTA")
+    if r_name == "LEGENDARY": return _style("LEGENDARIO", "YELLOW")
+    return r_name
+
+# ==============================================================================
+#  SYSTEM UTILS
+# ==============================================================================
+
+def clear_screen():
+    """Clears the console screen based on OS."""
     os.system('cls' if os.name == 'nt' else 'clear')
 
+def wait_enter(prompt: str = "(Presiona Enter para continuar)"):
+    """Pauses execution until user presses Enter."""
+    print(f"\n{_style(prompt, 'GREY')}")
+    input()
+
+def print_separator(char: str = "-", length: int = 60):
+    """Prints a styled horizontal line."""
+    print(_style(char * length, "GREY"))
+
 # ==============================================================================
-#  Visual Helpers (Styles & Gauges)
+#  BANNERS & INPUTS
 # ==============================================================================
 
-def _style(text: str, code: str, enable: bool = True) -> str:
-    """Apply ANSI color code."""
-    return f"\033[{code}m{text}\033[0m" if enable else text
+def print_banner():
+    """Prints the ASCII Logo."""
+    clear_screen()
+    logo = r"""
+  _____  _____  _      _ _       
+ |  __ \|  __ \| |    (_) |      
+ | |  | | |__) | |     _| |_ ___ 
+ | |  | |  _  /| |    | | __/ _ \
+ | |__| | | \ \| |____| | ||  __/
+ |_____/|_|  \_\______|_|\__\___|
+    Demon Recruiter Lite
+    """
+    print(_style(logo, "RED"))
+    print_separator()
 
-def _rarity_label(rarity_obj: Any, color: bool = True) -> str:
-    """Format rarity with color and translated text."""
-    if hasattr(rarity_obj, "value"): 
-        key = str(rarity_obj.value).lower()
-    else:
-        key = str(rarity_obj).lower()
-
-    # Spanish translation map
-    trans = {
-        "common": "Común",
-        "uncommon": "Poco Común",
-        "rare": "Raro",
-        "epic": "Épico",
-        "legendary": "Legendario"
-    }
-    label = trans.get(key, key.title())
-
-    # Colors
-    palette = {
-        "common": "37",    # White
-        "uncommon": "32",  # Green
-        "rare": "34",      # Blue
-        "epic": "35",      # Magenta
-        "legendary": "33", # Yellow
-    }
-    return _style(label.upper(), palette.get(key, "37"), color)
-
-def rapport_gauge(val: int, lo: int = RAPPORT_MIN, hi: int = RAPPORT_MAX) -> str:
-    """Visual bar for rapport: [··|·#··]"""
-    width = hi - lo + 1
-    width = max(3, width)
-    cells = ["·"] * width
-
-    idx = max(0, min(width - 1, val - lo))
-    zero = max(0, min(width - 1, 0 - lo))
-
-    cells[zero] = "|"
-    cells[idx] = "#"
-    if idx == zero:
-        cells[idx] = "X"
-
-    return "[" + "".join(cells) + "]"
-
-def distance_trend(delta: int) -> str:
-    """Returns a visual indicator of alignment shift."""
-    if delta < 0: return ">>> (Acercándose)"
-    if delta > 0: return "<<< (Alejándose)"
-    return "--- (Sin cambios)"
-
-def print_dex_card(d: Demon, show_portrait: bool = True, color: bool = True) -> None:
-    """Prints a translated, detailed card of the demon."""
-    rarity_txt = _rarity_label(getattr(d, "rarity", "COMMON"), color)
-    perso = getattr(d, "personality", None)
-    perso_txt = perso.name if hasattr(perso, "name") else str(perso)
-    
-    lc = d.alignment.law_chaos
-    ld = d.alignment.light_dark
-
-    try:
-        ts = get_terminal_size((80, 20))
-        width = max(60, min(90, ts.columns))
-    except Exception:
-        width = 60
+def read_difficulty() -> str:
+    """Reads initial difficulty setting (User-facing in Spanish)."""
+    while True:
+        print(f"\n{_style('SELECCIONA DIFICULTAD:', 'BOLD')}")
+        print("1. Normal (Experiencia estándar)")
+        print("2. Difícil (Menos turnos, personalidades estrictas)")
+        choice = input("> ").strip()
         
-    hr = "─" * (width - 2)
-    title = f" {d.name} "
-    
-    print(f"╭{hr}╮")
-    print(f"│ {_style(title, '1', color).ljust(width + 4)} │") # +4 heuristic for bold codes
-    print(f"│ Rareza: {rarity_txt}".ljust(width + 7) + "│")
-    print(f"│ Personalidad: {perso_txt}".ljust(width - 3) + "│")
-    print(f"│ Alineación (LC/LD): ({lc}, {ld})".ljust(width - 3) + "│")
-    
-    stats_line = f"Paciencia: {d.patience} | Tolerancia: {d.tolerance}"
-    print(f"│ {stats_line}".ljust(width - 3) + "│")
-
-    if show_portrait:
-        path = get_portrait_path(d)
-        if path:
-            # We just show the path in CLI, in Discord this would be the image attachment
-            print(f"│ Imagen: {os.path.basename(path)}".ljust(width - 3) + "│")
-
-    desc = getattr(d, "description", "")
-    if desc:
-        print(f"│ {'Descripción:'.ljust(width - 4)} │")
-        wrapped = textwrap.wrap(desc, width=width - 6)
-        for line in wrapped:
-            print(f"│   {line}".ljust(width - 3) + "│")
-
-    print(f"╰{hr}╯")
-
-# ==============================================================================
-#  Interaction Callbacks (Spanish)
-# ==============================================================================
+        if choice == "1": return "NORMAL"
+        if choice == "2": return "HARD"
+        print(_style("Opción no válida.", "RED"))
 
 def ask_yes_no(prompt: str) -> bool:
-    """Generic Yes/No prompt in Spanish."""
+    """Generic Yes/No prompt in Spanish (s/n)."""
     while True:
-        ans = input(f"{prompt} (s/n): ").strip().lower()
-        if ans in ("s", "si", "sí", "y", "yes"): return True
-        if ans in ("n", "no"):  return False
-        print(">> Por favor responde 's' (sí) o 'n' (no).")
+        # Prompt: "Pregunta (s/n) > "
+        choice = input(f"{prompt} (s/n) > ").lower().strip()
+        if choice in ['s', 'si', 'sí', 'y', 'yes']: return True
+        if choice in ['n', 'no']: return False
 
-def ask_pay(amount: int, current_gold: int) -> bool:
-    """Callback for 'ask_gold' event."""
-    print(f"\n[Evento] El demonio te pide {amount} macca. (Tienes: {current_gold})")
-    return ask_yes_no("¿Aceptas pagar?")
-
-def ask_give_item(item_id: str, amount: int, have: int) -> bool:
-    """Callback for 'ask_item' event."""
-    display_name = item_id.replace("_", " ").title()
-    print(f"\n[Evento] Te piden {amount}x {display_name}. (Tienes: {have})")
-    return ask_yes_no(f"¿Entregar {amount}x {display_name}?")
+def ask_selection(options: List[str], prompt: str = "Selecciona opción") -> int:
+    """
+    Generic menu selection. Returns the index (0-based) of the choice.
+    Returns -1 if cancel/back (if '0' is entered).
+    """
+    while True:
+        try:
+            choice = input(f"\n{prompt} > ").strip()
+            if choice == '0': return -1
+            idx = int(choice) - 1
+            if 0 <= idx < len(options):
+                return idx
+        except ValueError:
+            pass
 
 # ==============================================================================
-#  Menus & Dispatch
+#  CARDS & HUD
 # ==============================================================================
 
-def print_banner() -> None:
-    print("========================================")
-    print(" SMT NEGOTIATION SIMULATOR (CLI) v1.0")
-    print("========================================")
-
-def read_difficulty() -> int:
-    while True:
-        raw = input("\nElige dificultad (1-5) [Default 3]: ").strip()
-        if not raw: return 3
-        if raw.isdigit() and 1 <= int(raw) <= 5:
-            return int(raw)
-        print("Inválido.")
-
-def show_menu(session) -> str:
-    if not session.in_progress:
-        print("La negociación ha terminado...")
-        return "0"
-    print("\n¿Qué deseas hacer?")
-    print("1) Responder la siguiente pregunta")
-    print("2) Bromear (minijuego rápido para ajustar rapport)")
-    print("3) Mostrar estado de la sesión")
-    print("4) Intentar cerrar trato ahora (evaluar unión)")
-    print("5) Despedirse (terminar negociación)")
-    print("6) Mostrar el DemonDex")
-    print("7) Guardar y salir")  
-    valid = {"1","2","3","4","5","6","7"}
-    while True:
-        choice = input("Elige una opción (1-6): ").strip()
-        if choice in valid:
-            return choice
-        print("OPCION NO VALIDA. Intenta de nuevo.")
-
-
-def dispatch_action(session, option: str, demons_catalog: list[Demon], weights: Dict[str, Dict[str, int]],cues: Dict[str, Dict[str, str]], events_registry: Dict[str, Any]) -> None:
+def print_dex_card(demon: Demon):
     """
-    Dispatch the selected option to the corresponding session action.
-    Follows your spec strictly.
+    Displays a detailed card for a demon (Used in Compendium).
     """
-    clear_screen()
-    if option == "1":
-        clear_screen()
-        p = session.player
-        print(f"--- RONDA {session.round_no} | {p.name} Lv.{p.lvl} ---")
-        print(f"HP: {p.hp}/{p.max_hp}  |  MP: {p.mp}/{p.max_mp}  |  Macca: {p.gold}")
-        print(f"XP: {p.exp}/{p.exp_next}")
-        print("-" * 40 + "\n")
-        
-        # Status Bar
-        # We use the visual gauge for rapport
-        print(f"Turnos: {session.turns_left} | Rapport: {rapport_gauge(session.rapport)}")
-        print(f"Demonio: {session.demon.name} (Rara: {session.demon.rarity.name})")
-        print("-" * 40)
-        effect = session.ask(events_registry)
-        feedback = session.process_answer(effect, weights, cues)
+    print_separator("=")
+    r_lbl = _rarity_label(demon.rarity)
+    p_lbl = _style(demon.personality.name, "CYAN")
+    
+    print(f" {demon.name.upper()}".ljust(40) + f"[{r_lbl}]")
+    print(f" Personalidad: {p_lbl}")
+    print_separator("-")
+    print(f" Afinidad Necesaria: {demon.rapport_needed}")
+    # Placeholder for future lore/stats
+    print_separator("=")
 
-        # Show reaction feedback (console layer)
-        print(f"{session.demon.name} parece {feedback.tone.lower()}. {feedback.cue}")
-
-        # Optional hints (only print if non-empty)
-        info_parts = []
-        if feedback.liked_tags: info_parts.append(f"Le gustó: {', '.join(feedback.liked_tags)}")
-        if feedback.disliked_tags: info_parts.append(f"Odió: {', '.join(feedback.disliked_tags)}")
-        if info_parts:
-            print(f"({'; '.join(info_parts)})")
-
-        # Intuitive indicators
-
-        print(f"  Afinidad (Rapport): {rapport_gauge(session.rapport)}")
-        print(f"  Distancia: {distance_trend(feedback.delta_distance)}")
-
-        # Pause to read the reaction
-        input("\n(Presiona Enter para continuar...)")
-
-    elif option == "2":
-        # Simple rapport mini-game: guess a number 0..2
-        secret = session.rng.randint(0, 2)
-
-        while True:
-            raw = input("Adivina un número (0-2): ").strip()
-            if raw in {"0", "1", "2"}:
-                guess = int(raw)
-                break
-            print("Entrada inválida. Intenta de nuevo (0, 1 o 2).")
-
-        if guess == secret:
-            print("¡Correcto!")
-            session.rapport = min(RAPPORT_MAX, session.rapport + 2)
-        else:
-            print("Incorrecto.")
-            session.rapport = max(RAPPORT_MIN, session.rapport - 1)
-
-        input("\n(Presiona Enter para continuar...)")
-
-    elif option == "3":
-        session.show_status()
-        input("\n(Presiona Enter para volver al menú...)")
-    elif option == "4":
-        session.check_union()
-        input("\n(Presiona Enter para volver al menú...)")
-    elif option == "5":
-        session.in_progress = False
-        session.fled = True
-        print(f"{session.demon.name} se marcha...")
-        input("\n(Presiona Enter para continuar...)")
-    elif option =="6":
-        clear_screen()
-        print_dex_card(session.demon)
-        input("\n(Presiona Enter para volver al menú...)")
-    elif option == "7":
-        print("Juego guardado. Saliendo...")
-        session.in_progress = False
+def print_header(player: Player, demon: Optional[Demon] = None, round_no: int = 0, max_rounds: int = 0):
+    """
+    Main HUD (Heads Up Display).
+    """
+    # 1. Turn Info
+    if max_rounds > 0:
+        turn_str = f"Turno: {round_no}/{max_rounds}"
     else:
-        print("OPCION NO VALIDA.")
+        turn_str = "PREPARACIÓN"
+
+    # 2. Player Stats
+    print_separator()
+    name_txt = _style(f"{player.name} [Nv.{player.lvl}]", "BOLD")
+    print(f" {name_txt}".ljust(40) + turn_str.rjust(30))
+    
+    # Color code HP (Red if critical < 30%)
+    hp_color = "RED" if player.hp < player.max_hp * 0.3 else "GREEN"
+    mp_color = "BLUE"
+    
+    hp_txt = _style(f"HP: {player.hp}/{player.max_hp}", hp_color)
+    mp_txt = _style(f"MP: {player.mp}/{player.max_mp}", mp_color)
+    gold_txt = _style(f"Macca: {player.gold}", "YELLOW")
+    
+    print(f" {hp_txt}  |  {mp_txt}  |  {gold_txt}")
+    
+    # XP Bar visualization (Optional but nice)
+    if player.exp_next > 0:
+        pct = int((player.exp / player.exp_next) * 100)
+        print(f" EXP: {pct}%".rjust(60))
+        
+    print_separator()
+    
+    # 3. Demon Info (Target)
+    if demon:
+        r_lbl = _rarity_label(demon.rarity)
+        print(f" VS  {_style(demon.name, 'RED')} ({r_lbl})".center(70))
+        print_separator()
+
+def print_rapport_bar(current: int, needed: int, length: int = 20):
+    """
+    Visual bar for negotiation progress.
+    """
+    if needed <= 0: needed = 1
+    ratio = max(0.0, min(1.0, current / needed))
+    filled = int(ratio * length)
+    
+    # Color logic based on success probability
+    color = "RED"
+    status = "NEUTRAL"
+    
+    if ratio < 0.3:
+        status = "FRÍO"
+        color = "BLUE"
+    elif ratio > 0.4 and ratio < 0.8:
+        status = "INTERESADO"
+        color = "YELLOW"
+    elif ratio >= 0.8:
+        status = "CONFIANZA"
+        color = "GREEN"
+    
+    bar_chars = "█" * filled + "░" * (length - filled)
+    bar_colored = _style(bar_chars, color)
+    
+    print(f" AFINIDAD: [{bar_colored}] {current}/{needed} ({status})")
+    print_separator()

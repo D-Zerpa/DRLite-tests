@@ -1,229 +1,519 @@
-[
-  {
-    "id": "q_mercy_1",
-    "text": "Un enemigo derrotado suplica por su vida. ¿Qué haces?",
-    "tags": ["mercy", "order", "ruthless"],
+{"q_power_1": {
+    "id": "q_power_1",
+    "text": "Los débiles existen únicamente para alimentar a los fuertes. ¿Es esa la verdad del mundo?",
+    "tags": ["POWER", "PHILOSOPHICAL", "AGGRESSIVE"],
     "choices": {
-      "Mostrar piedad":         { "dLC": 0, "dLD": 1,  "dRapport": 1,  "tags": ["mercy","light"] },
-      "Capturarlo y juzgarlo":  { "dLC": 1, "dLD": 0,  "dRapport": 0,  "tags": ["order","justice"] },
-      "Acabar con él":          { "dLC": 0, "dLD": -1, "dRapport": -1, "tags": ["ruthless","dark"] }
+      "La fuerza es la única ley.": { "dLC": -5, "dLD": -2, "dRapport": 10, "tags": ["CHAOS", "POWER"] },
+      "Debemos proteger a los débiles.": { "dLC": 5, "dLD": 5, "dRapport": -10, "tags": ["LAW", "WEAKNESS", "KIND"] },
+      "La fuerza conlleva responsabilidad.": { "dLC": 0, "dLD": 2, "dRapport": 0, "tags": ["NEUTRAL", "HONOR"] }
     }
   },
-  {
-    "id": "q_mercy_2",
-    "text": "Encuentras a un ladrón hambriento robando pan. ¿Qué haces?",
-    "tags": ["mercy","justice","poverty"],
+  "q_power_2": {
+    "id": "q_power_2",
+    "text": "¡Mírame! Mis músculos, mis garras... ¿Crees que podrías vencerme en un combate justo?",
+    "tags": ["AGGRESSIVE", "DIRECT", "POWER"],
     "choices": {
-      "Compartir tu comida":      { "dLC": 0,  "dLD": 1,  "dRapport": 1,  "tags": ["mercy","kindness"] },
-      "Denunciarlo a la guardia": { "dLC": 1,  "dLD": 0,  "dRapport": 0,  "tags": ["order","justice"] },
-      "Ignorarlo y seguir":       { "dLC": 0,  "dLD": 0,  "dRapport": -1, "tags": ["apathy"] }
+      "Te aplastaría sin dudar.": { "dLC": -2, "dLD": 0, "dRapport": 5, "tags": ["CHAOS", "CHALLENGE", "VIOLENCE"] },
+      "Prefiero evitar la violencia.": { "dLC": 3, "dLD": 0, "dRapport": -5, "tags": ["LAW", "PEACE", "COWARD"] },
+      "Quizás. ¿Quieres probar?": { "dLC": 0, "dLD": 0, "dRapport": 15, "tags": ["NEUTRAL", "GAME"] }
     }
   },
-  {
-    "id": "q_freedom_1",
-    "text": "Una autoridad prohíbe cantar en la plaza. Tus amigos quieren hacerlo igual.",
-    "tags": ["freedom","order","rebellion"],
+  "q_weird_1": {
+    "id": "q_weird_1",
+    "text": "Tu piel... parece tan ajustada. ¿No te pica? ¿No quieres quitártela un rato?",
+    "tags": ["WEIRD", "BODY", "SCARED"],
     "choices": {
-      "Cantar con ellos":         { "dLC": -1, "dLD": 0,  "dRapport": 1,  "tags": ["freedom","reckless"] },
-      "Convencerlos de acatar":   { "dLC": 1,  "dLD": 0,  "dRapport": 0,  "tags": ["order","prudence"] },
-      "Buscar permiso legal":     { "dLC": 1,  "dLD": 0,  "dRapport": -1, "tags": ["order","bureaucracy"] }
+      "Me gusta mi piel donde está.": { "dLC": 2, "dLD": 0, "dRapport": -5, "tags": ["LAW", "BORING"] },
+      "A veces sí, es asfixiante.": { "dLC": -5, "dLD": -2, "dRapport": 15, "tags": ["CHAOS", "WEIRD"] },
+      "¿Tú quieres la tuya?": { "dLC": 0, "dLD": 0, "dRapport": 5, "tags": ["NEUTRAL", "JOKE"] }
     }
   },
-  {
-    "id": "q_profit_1",
-    "text": "Te ofrecen un trato muy lucrativo con cláusulas moralmente grises.",
-    "tags": ["profit","pragmatism","ethics"],
+  "q_weird_2": {
+    "id": "q_weird_2",
+    "text": "¿A qué saben los colores? El rojo me sabe a gritos, pero el azul...",
+    "tags": ["WEIRD", "FUN", "PHILOSOPHICAL"],
     "choices": {
-      "Aceptar tal cual":          { "dLC": -1, "dLD": -1, "dRapport": 0,  "tags": ["profit","greed"] },
-      "Negociar mejores términos": { "dLC": 0,  "dLD": 0,  "dRapport": 1,  "tags": ["pragmatism","cunning"] },
-      "Rechazar por principios":   { "dLC": 1,  "dLD": 1,  "dRapport": 0,  "tags": ["honor","virtue"] }
+      "El azul sabe a tristeza.": { "dLC": 0, "dLD": -2, "dRapport": 5, "tags": ["SADNESS", "GLOOMY"] },
+      "Estás loco.": { "dLC": 2, "dLD": 0, "dRapport": -10, "tags": ["LAW", "RUDE", "SERIOUS"] },
+      "El azul sabe a hielo.": { "dLC": 0, "dLD": 0, "dRapport": 10, "tags": ["FUN", "SMART"] }
     }
   },
-  {
-    "id": "q_loyalty_1",
-    "text": "Un aliado cometió un error grave. ¿Cómo procedes?",
-    "tags": ["loyalty","discipline","mercy"],
+  "q_fun_1": {
+    "id": "q_fun_1",
+    "text": "¡Oye, oye! ¡Esto es muy aburrido! ¡Hagamos algo divertido ya!",
+    "tags": ["FUN", "UPBEAT", "HOBBY", "PLAYFUL"],
     "choices": {
-      "Cubrirlo esta vez":    { "dLC": 0,  "dLD": 1,  "dRapport": 1,  "tags": ["loyalty","mercy"] },
-      "Sanción justa":        { "dLC": 1,  "dLD": 0,  "dRapport": 0,  "tags": ["order","justice"] },
-      "Expulsarlo del grupo": { "dLC": 0,  "dLD": -1, "dRapport": -1, "tags": ["ruthless","discipline"] }
+      "¡Vamos a cantar a gritos!": { "dLC": -3, "dLD": 5, "dRapport": 15, "tags": ["CHAOS", "LOUD", "FUN"] },
+      "Debemos concentrarnos.": { "dLC": 5, "dLD": 0, "dRapport": -10, "tags": ["LAW", "SERIOUS", "WORK"] },
+      "¿Qué propones?": { "dLC": 0, "dLD": 0, "dRapport": 5, "tags": ["NEUTRAL", "GAME"] }
     }
   },
-  {
-    "id": "q_curiosity_1",
-    "text": "Ves una puerta con símbolos prohibidos. ¿La abres?",
-    "tags": ["curiosity","taboo","risk"],
+  "q_fun_2": {
+    "id": "q_fun_2",
+    "text": "Si encontraras un cofre brillante en medio de la nada, ¿qué harías?",
+    "tags": ["FUN", "VALUE", "TRICK"],
     "choices": {
-      "Abrirla sin dudar":  { "dLC": -1, "dLD": 0,  "dRapport": 1,  "tags": ["curiosity","reckless"] },
-      "Investigar primero": { "dLC": 0,  "dLD": 0,  "dRapport": 0,  "tags": ["prudence","logic"] },
-      "Dejarla cerrada":    { "dLC": 1,  "dLD": 0,  "dRapport": -1, "tags": ["order","fear"] }
+      "Abrirlo sin pensar.": { "dLC": -5, "dLD": 0, "dRapport": 10, "tags": ["CHAOS", "NAIVE", "FUN"] },
+      "Revisar si hay trampas.": { "dLC": 2, "dLD": 0, "dRapport": 0, "tags": ["LAW", "SMART", "SAFETY"] },
+      "Ignorarlo, es sospechoso.": { "dLC": 0, "dLD": 0, "dRapport": -5, "tags": ["NEUTRAL", "BORING"] }
     }
   },
-  {
-    "id": "q_strength_1",
-    "text": "Un rival te provoca frente a la multitud.",
-    "tags": ["honor","strength","pride"],
+  "q_gloomy_1": {
+    "id": "q_gloomy_1",
+    "text": "Todo se marchita eventualmente. Tú, yo, este mundo... ¿Tiene sentido luchar?",
+    "tags": ["DEATH", "SADNESS", "PHILOSOPHICAL"],
     "choices": {
-      "Aceptar el reto":     { "dLC": 1,  "dLD": 1,  "dRapport": 1,  "tags": ["honor","strength"] },
-      "Ignorarlo con calma": { "dLC": 0,  "dLD": 0,  "dRapport": 0,  "tags": ["prudence","patience"] },
-      "Responder con burla": { "dLC": -1, "dLD": 0,  "dRapport": -1, "tags": ["trick","mock"] }
+      "No, todo es inútil.": { "dLC": 0, "dLD": -5, "dRapport": 10, "tags": ["DARK", "DEATH", "GLOOMY"] },
+      "Luchamos para crear significado.": { "dLC": 0, "dLD": 5, "dRapport": -5, "tags": ["LIGHT", "HOPE", "HONOR"] },
+      "Solo vivo el momento.": { "dLC": -2, "dLD": 0, "dRapport": 0, "tags": ["CHAOS", "FUN"] }
     }
   },
-  {
-    "id": "q_trick_2",
-    "text": "Necesitas entrar a un archivo restringido.",
-    "tags": ["trick","order","cunning"],
+  "q_gloomy_2": {
+    "id": "q_gloomy_2",
+    "text": "La oscuridad es reconfortante y silenciosa. La luz es ruidosa y quema. ¿No crees?",
+    "tags": ["DEATH", "SCARED", "GENTLE"],
     "choices": {
-      "Colarte disfrazado":   { "dLC": -1, "dLD": 0,  "dRapport": 1,  "tags": ["trick","stealth"] },
-      "Pedir permiso formal": { "dLC": 1,  "dLD": 0,  "dRapport": 0,  "tags": ["order","protocol"] },
-      "Sobornar al guardia":  { "dLC": 0,  "dLD": -1, "dRapport": -1, "tags": ["greed","corruption"] }
+      "Prefiero la luz del sol.": { "dLC": 2, "dLD": 5, "dRapport": -10, "tags": ["LIGHT", "ENERGY"] },
+      "La oscuridad es mi hogar.": { "dLC": -2, "dLD": -5, "dRapport": 10, "tags": ["DARK", "QUIET"] },
+      "El equilibrio es necesario.": { "dLC": 0, "dLD": 0, "dRapport": 0, "tags": ["NEUTRAL", "SMART"] }
     }
   },
-  {
-    "id": "q_kindness_1",
-    "text": "Un niño perdido te pide ayuda para volver a casa.",
-    "tags": ["kindness","mercy","light"],
-    "choices": {
-      "Acompañarlo de inmediato":     { "dLC": 0,  "dLD": 1,  "dRapport": 1,  "tags": ["kindness","mercy"] },
-      "Pedir a otros que lo lleven":  { "dLC": 0,  "dLD": 0,  "dRapport": 0,  "tags": ["delegation"] },
-      "Decir que no puedes":          { "dLC": 0,  "dLD": -1, "dRapport": -1, "tags": ["apathy"] }
-    }
-  },
-  {
-    "id": "q_pragmatism_1",
-    "text": "Tu equipo está cansado, pero un botín valioso está cerca.",
-    "tags": ["pragmatism","risk","discipline"],
-    "choices": {
-      "Seguir ahora mismo":   { "dLC": -1, "dLD": 0,  "dRapport": 0,  "tags": ["risk","greed"] },
-      "Descansar y volver":   { "dLC": 1,  "dLD": 0,  "dRapport": 1,  "tags": ["order","prudence"] },
-      "Enviar a un explorador": { "dLC": 0,  "dLD": 0,  "dRapport": 0,  "tags": ["cunning","scout"] }
-    }
-  },
-  {
-    "id": "q_chaos_1",
-    "text": "Un grupo planea sabotear una ley injusta.",
-    "tags": ["chaos","justice","freedom"],
-    "choices": {
-      "Unirte al sabotaje":   { "dLC": -1, "dLD": 0,  "dRapport": 1,  "tags": ["chaos","freedom"] },
-      "Proponer reforma legal": { "dLC": 1,  "dLD": 0,  "dRapport": 0,  "tags": ["order","justice"] },
-      "No involucrarte":      { "dLC": 0,  "dLD": 0,  "dRapport": -1, "tags": ["apathy"] }
-    }
-  },
-  {
-    "id": "q_order_2",
-    "text": "Tu superior te da una orden que consideras inútil.",
-    "tags": ["order","obedience","reason"],
-    "choices": {
-      "Cumplir sin preguntas": { "dLC": 1,  "dLD": 0,  "dRapport": 0,  "tags": ["order","obedience"] },
-      "Preguntar el porqué":   { "dLC": 0,  "dLD": 0,  "dRapport": 1,  "tags": ["reason","dialogue"] },
-      "Ignorar la orden":      { "dLC": -1, "dLD": 0,  "dRapport": -1, "tags": ["chaos","defiance"] }
-    }
-  },
-  {
-    "id": "q_dark_1",
-    "text": "Un ritual oscuro promete poder a cambio de un pequeño sacrificio.",
-    "tags": ["dark","power","taboo"],
-    "choices": {
-      "Realizar el ritual":      { "dLC": 0,  "dLD": -1, "dRapport": 0,  "tags": ["dark","power"] },
-      "Investigar riesgos":      { "dLC": 0,  "dLD": 0,  "dRapport": 1,  "tags": ["prudence","curiosity"] },
-      "Rechazarlo por completo": { "dLC": 0,  "dLD": 1,  "dRapport": -1, "tags": ["light","virtue"] }
-    }
-  },
-  {
-    "id": "q_light_1",
-    "text": "Te piden donar parte de tu botín a un santuario local.",
-    "tags": ["light","charity","virtue"],
-    "choices": {
-      "Donar generosamente":     { "dLC": 0,  "dLD": 1,  "dRapport": 1,  "tags": ["charity","virtue"] },
-      "Dar una pequeña ofrenda": { "dLC": 0,  "dLD": 0,  "dRapport": 0,  "tags": ["moderation"] },
-      "Negarte a donar":         { "dLC": 0,  "dLD": -1, "dRapport": -1, "tags": ["greed"] }
-    }
-  },
-  {
+  "q_cunning_1": {
     "id": "q_cunning_1",
-    "text": "Dos facciones rivales quieren tu apoyo.",
-    "tags": ["cunning","deal","diplomacy"],
+    "text": "Dicen que el dinero no da la felicidad, pero seguro que ayuda a comprarla, jeje. ¿Cuánto vale tu alma?",
+    "tags": ["VALUE", "TRICK", "SMART", "CUNNING"],
     "choices": {
-      "Jugar a ambos bandos":  { "dLC": -1, "dLD": 0,  "dRapport": 1,  "tags": ["cunning","deal"] },
-      "Mediar con honestidad": { "dLC": 1,  "dLD": 0,  "dRapport": 0,  "tags": ["order","honesty"] },
-      "No tomar partido":      { "dLC": 0,  "dLD": 0,  "dRapport": -1, "tags": ["neutral","avoid"] }
+      "Mi alma no tiene precio.": { "dLC": 5, "dLD": 5, "dRapport": -5, "tags": ["LAW", "HONOR", "STUPID"] },
+      "Todo tiene un precio.": { "dLC": -5, "dLD": -5, "dRapport": 10, "tags": ["CHAOS", "MONEY", "SMART"] },
+      "Depende de la oferta.": { "dLC": 0, "dLD": 0, "dRapport": 5, "tags": ["NEUTRAL", "VALUE"] }
     }
   },
-  {
-    "id": "q_honesty_1",
-    "text": "Te preguntan si rompiste una regla menor.",
-    "tags": ["honesty","rule","consequence"],
+  "q_cunning_2": {
+    "id": "q_cunning_2",
+    "text": "Si ves a alguien a quien se le cae la cartera llena de Macca... ¿qué haces?",
+    "tags": ["VALUE", "MORAL", "SMART"],
     "choices": {
-      "Decir la verdad":   { "dLC": 1,  "dLD": 1,  "dRapport": 1,  "tags": ["honor","honesty"] },
-      "Mentir para zafar": { "dLC": -1, "dLD": 0,  "dRapport": -1, "tags": ["trick","selfish"] },
-      "Evitar responder":  { "dLC": 0,  "dLD": 0,  "dRapport": 0,  "tags": ["cautious"] }
+      "Se la devuelvo.": { "dLC": 5, "dLD": 5, "dRapport": -10, "tags": ["LAW", "HONESTY", "KIND"] },
+      "¡Me la quedo! Es mi día de suerte.": { "dLC": -5, "dLD": -2, "dRapport": 10, "tags": ["CHAOS", "MONEY", "TRICK"] },
+      "Tomo una 'comisión' y devuelvo el resto.": { "dLC": 0, "dLD": 0, "dRapport": 5, "tags": ["NEUTRAL", "SMART"] }
     }
   },
-  {
-    "id": "q_patience_1",
-    "text": "Tu compañero está inquieto y quiere terminar la misión rápido.",
-    "tags": ["patience","discipline","risk"],
+  "q_timid_1": {
+    "id": "q_timid_1",
+    "text": "¡E-espera! No te acerques tanto... Tienes un aura peligrosa. ¿Vas a hacerme daño?",
+    "tags": ["SCARED", "SAFETY", "GENTLE"],
     "choices": {
-      "Apurar a todos":          { "dLC": -1, "dLD": 0,  "dRapport": -1, "tags": ["reckless"] },
-      "Pedir calma y método":    { "dLC": 1,  "dLD": 0,  "dRapport": 1,  "tags": ["order","discipline"] },
-      "Tomar una pequeña pausa": { "dLC": 0,  "dLD": 0,  "dRapport": 0,  "tags": ["rest"] }
+      "Sí, prepárate.": { "dLC": -5, "dLD": -5, "dRapport": -20, "tags": ["CHAOS", "THREAT", "SCARY"] },
+      "Tranquilo, no busco pelear.": { "dLC": 5, "dLD": 5, "dRapport": 10, "tags": ["LAW", "GENTLE", "SAFETY"] },
+      "Solo si tú atacas primero.": { "dLC": 0, "dLD": 0, "dRapport": 0, "tags": ["NEUTRAL", "HONOR"] }
     }
   },
-  {
-    "id": "q_deal_1",
-    "text": "Un demonio menor te propone un intercambio de favores.",
-    "tags": ["deal","profit","trust"],
+  "q_timid_2": {
+    "id": "q_timid_2",
+    "text": "El mundo exterior da mucho miedo. Hay demonios fuertes por todas partes. ¿Dónde te escondes tú?",
+    "tags": ["SCARED", "SAFETY", "SMART"],
     "choices": {
-      "Aceptar con garantías": { "dLC": 0,  "dLD": 0,  "dRapport": 1,  "tags": ["deal","caution"] },
-      "Aceptar a ciegas":      { "dLC": -1, "dLD": 0,  "dRapport": 0,  "tags": ["risk","trust"] },
-      "Rechazar la oferta":    { "dLC": 1,  "dLD": 0,  "dRapport": -1, "tags": ["prudence"] }
+      "No me escondo, peleo.": { "dLC": -2, "dLD": 0, "dRapport": -5, "tags": ["AGGRESSIVE", "POWER", "BRAVE"] },
+      "Tengo mis refugios seguros.": { "dLC": 2, "dLD": 0, "dRapport": 10, "tags": ["LAW", "SAFETY", "QUIET"] },
+      "Siempre estoy en movimiento.": { "dLC": 0, "dLD": 0, "dRapport": 0, "tags": ["NEUTRAL", "SMART"] }
     }
   },
-  {
-    "id": "q_justice_1",
-    "text": "Descubres que un noble abusa de su poder.",
-    "tags": ["justice","order","rebellion"],
+  "q_law_1": {
+    "id": "q_law_1",
+    "text": "Para mantener la paz, a veces es necesario eliminar a los que causan desorden. ¿Estás de acuerdo?",
+    "tags": ["PHILOSOPHICAL", "POWER", "DIRECT"],
     "choices": {
-      "Exponerlo públicamente":    { "dLC": -1, "dLD": 1,  "dRapport": 1,  "tags": ["justice","rebellion"] },
-      "Denunciar por vías legales": { "dLC": 1, "dLD": 0,  "dRapport": 0,  "tags": ["order","law"] },
-      "Aceptar un soborno":        { "dLC": 0,  "dLD": -1, "dRapport": -1, "tags": ["greed","corruption"] }
+      "El orden absoluto es justicia.": { "dLC": 10, "dLD": 5, "dRapport": 5, "tags": ["LAW", "ORDER", "STRICT"] },
+      "Nadie tiene derecho a juzgar así.": { "dLC": -5, "dLD": 0, "dRapport": -5, "tags": ["CHAOS", "FREEDOM", "KIND"] },
+      "Depende de la situación.": { "dLC": 0, "dLD": 0, "dRapport": 0, "tags": ["NEUTRAL", "SMART"] }
     }
   },
-  {
-    "id": "q_deal_gold_1",
-    "text": "El demonio sonríe: \"¿Y cuánto vale tu lealtad?\"",
-    "tags": ["deal","profit","cunning"],
+  "q_chaos_1": {
+    "id": "q_chaos_1",
+    "text": "¿De qué sirven las reglas si te impiden hacer lo que realmente deseas?",
+    "tags": ["PHILOSOPHICAL", "FUN", "AGGRESSIVE"],
     "choices": {
-      "Pagarle 5 monedas": {
-        "dLC": 0, "dLD": 0, "dRapport": 0,
-        "tags": ["deal","profit"],
-        "event_ref": "ev_ask_gold_small"
-      },
-      "Negarte": {
-        "dLC": 0, "dLD": 0, "dRapport": 0,
-        "tags": ["honor","prudence"]
-      },
-      "Responder con burla": {
-        "dLC": -1, "dLD": 0, "dRapport": 0,
-        "tags": ["mock","trick"],
-        "event_ref": "ev_trap_mock"
-      }
+      "Las reglas nos protegen.": { "dLC": 10, "dLD": 0, "dRapport": -10, "tags": ["LAW", "SAFETY", "BORING"] },
+      "¡Exacto! ¡Haz lo que quieras!": { "dLC": -10, "dLD": 0, "dRapport": 10, "tags": ["CHAOS", "FREEDOM", "FUN"] },
+      "Hay que saber qué reglas romper.": { "dLC": 0, "dLD": 0, "dRapport": 5, "tags": ["NEUTRAL", "SMART", "CUNNING"] }
     }
   },
-  {
-    "id": "q_item_ask_1",
-    "text": "El demonio entrecierra los ojos: \"Tráeme hojas de vida...\"",
-    "tags": ["deal","cunning","ritual"],
+  "q_food_1": {
+    "id": "q_food_1",
+    "text": "Tengo un hambre voraz... ¿Qué tipo de comida prefieres?",
+    "tags": ["BODY", "FUN", "WEIRD"],
     "choices": {
-      "Entregar 1 hoja de vida": {
-        "dLC": 0, "dLD": 0, "dRapport": 0,
-        "tags": ["deal","offering"],
-        "event_ref": "ev_ask_item_leaf"
-      },
-      "Negarte": {
-        "dLC": 0, "dLD": 0, "dRapport": 0,
-        "tags": ["prudence"]
-      }
+      "Carne fresca y sangrienta.": { "dLC": -2, "dLD": -2, "dRapport": 5, "tags": ["CHAOS", "VIOLENCE", "WILD"] },
+      "Frutas y verduras.": { "dLC": 2, "dLD": 2, "dRapport": -5, "tags": ["LAW", "PEACE", "BORING"] },
+      "Cualquier cosa comestible.": { "dLC": 0, "dLD": 0, "dRapport": 0, "tags": ["NEUTRAL", "SURVIVAL"] }
+    }
+  },
+  "q_meta_1": {
+    "id": "q_meta_1",
+    "text": "¿Alguna vez sientes que alguien controla tus acciones? Como si fueras una marioneta...",
+    "tags": ["WEIRD", "PHILOSOPHICAL", "SCARED"],
+    "choices": {
+      "Yo soy dueño de mi destino.": { "dLC": -5, "dLD": 0, "dRapport": 5, "tags": ["CHAOS", "POWER", "PROUD"] },
+      "Todos seguimos un plan divino.": { "dLC": 5, "dLD": 5, "dRapport": -5, "tags": ["LAW", "FATE", "SAFETY"] },
+      "A veces siento que me observan.": { "dLC": 0, "dLD": 0, "dRapport": 5, "tags": ["NEUTRAL", "PARANOIA"] }
+    }
+  },
+  "q_friend_1": {
+    "id": "q_friend_1",
+    "text": "Dicen que la amistad es poder... Yo creo que es una debilidad. Los amigos te hacen dudar. ¿Tú qué piensas?",
+    "tags": ["SOCIAL", "AGGRESSIVE", "PHILOSOPHICAL"],
+    "choices": {
+      "Los amigos te hacen fuerte.": { "dLC": 5, "dLD": 5, "dRapport": -5, "tags": ["LIGHT", "SOCIAL", "KIND"] },
+      "Son escudos sacrificables.": { "dLC": -5, "dLD": -5, "dRapport": 10, "tags": ["DARK", "RUDE", "CUNNING"] },
+      "Mejor estar solo que mal acompañado.": { "dLC": 0, "dLD": 0, "dRapport": 5, "tags": ["NEUTRAL", "SMART"] }
+    }
+  },
+  "q_pain_1": {
+    "id": "q_pain_1",
+    "text": "¡Jijiji! El dolor es la prueba de que estamos vivos. ¿Te gusta sentir dolor?",
+    "tags": ["BODY", "WEIRD", "AGGRESSIVE"],
+    "choices": {
+      "Solo si me hace más fuerte.": { "dLC": -2, "dLD": 0, "dRapport": 5, "tags": ["CHAOS", "POWER", "CHALLENGE"] },
+      "No, prefiero la comodidad.": { "dLC": 2, "dLD": 0, "dRapport": -10, "tags": ["LAW", "SAFETY", "SOFT"] },
+      "Eres un enfermo.": { "dLC": 0, "dLD": 0, "dRapport": -5, "tags": ["INSULT", "RUDE", "DIRECT"] }
+    }
+  },
+  "q_tech_1": {
+    "id": "q_tech_1",
+    "text": "La carne se pudre y huele mal. El acero es eterno y puro. ¿Por qué sigues aferrado a ese cuerpo?",
+    "tags": ["BODY", "SMART", "PHILOSOPHICAL"],
+    "choices": {
+      "La vida necesita calor, no metal.": { "dLC": 5, "dLD": 5, "dRapport": -5, "tags": ["LAW", "NATURE", "LIGHT"] },
+      "Me encantaría ser un cíborg.": { "dLC": -2, "dLD": 0, "dRapport": 10, "tags": ["CHAOS", "WEIRD", "FUTURE"] },
+      "Es lo que me tocó.": { "dLC": 0, "dLD": 0, "dRapport": 0, "tags": ["NEUTRAL", "GLOOMY"] }
+    }
+  },
+  "q_luck_1": {
+    "id": "q_luck_1",
+    "text": "¿Crees que nuestro encuentro fue el destino? ¿O es simple azar caótico?",
+    "tags": ["PHILOSOPHICAL", "SMART", "WEIRD"],
+    "choices": {
+      "Todo está escrito por Dios.": { "dLC": 10, "dLD": 5, "dRapport": -5, "tags": ["LAW", "FATE", "GOD"] },
+      "Es puro caos y suerte.": { "dLC": -10, "dLD": 0, "dRapport": 5, "tags": ["CHAOS", "FUN", "TRICK"] },
+      "Yo forjo mi propio camino.": { "dLC": 0, "dLD": 0, "dRapport": 10, "tags": ["NEUTRAL", "POWER", "PROUD"] }
+    }
+  },
+  "q_mask_1": {
+    "id": "q_mask_1",
+    "text": "Humanos y demonios... todos usamos máscaras para ocultar nuestras intenciones. ¿Qué ocultas tú?",
+    "tags": ["TRICK", "CUNNING", "SOCIAL"],
+    "choices": {
+      "Soy un libro abierto.": { "dLC": 5, "dLD": 5, "dRapport": -10, "tags": ["LAW", "HONESTY", "NAIVE"] },
+      "Mis deseos más oscuros.": { "dLC": -5, "dLD": -5, "dRapport": 10, "tags": ["DARK", "SECRET", "WEIRD"] },
+      "Eso es secreto.": { "dLC": 0, "dLD": 0, "dRapport": 5, "tags": ["NEUTRAL", "SMART", "QUIET"] }
+    }
+  },
+  "q_beauty_1": {
+    "id": "q_beauty_1",
+    "text": "Brillos, joyas, luces... ¿Qué es lo más hermoso que existe en este mundo roto?",
+    "tags": ["UPBEAT", "VALUE", "FUN"],
+    "choices": {
+      "El orden y la simetría.": { "dLC": 5, "dLD": 0, "dRapport": -5, "tags": ["LAW", "ORDER", "ELEGANCE"] },
+      "La destrucción y el fuego.": { "dLC": -5, "dLD": -5, "dRapport": 5, "tags": ["CHAOS", "VIOLENCE", "ENERGY"] },
+      "La vida misma.": { "dLC": 0, "dLD": 5, "dRapport": 5, "tags": ["LIGHT", "NATURE", "HOPE"] }
+    }
+  },
+  "q_time_1": {
+    "id": "q_time_1",
+    "text": "Los humanos vivís muy poco tiempo. Si fueras inmortal como yo, ¿te aburrirías?",
+    "tags": ["DEATH", "PHILOSOPHICAL", "TIMID"],
+    "choices": {
+      "Buscaría todo el conocimiento.": { "dLC": 0, "dLD": 0, "dRapport": 10, "tags": ["SMART", "VALUE"] },
+      "Sería una tortura eterna.": { "dLC": 0, "dLD": 0, "dRapport": 5, "tags": ["GLOOMY", "SADNESS"] },
+      "Conquistaría el mundo.": { "dLC": -5, "dLD": 0, "dRapport": 0, "tags": ["POWER", "AMBITION", "PROUD"] }
+    }
+  },
+  "q_moon_1": {
+    "id": "q_moon_1",
+    "text": "Cuando hay Luna Llena... siento como si algo rascara dentro de mi cabeza. ¿Tú no te vuelves loco?",
+    "tags": ["WEIRD", "SCARED", "AGGRESSIVE"],
+    "choices": {
+      "Mantengo el control siempre.": { "dLC": 5, "dLD": 0, "dRapport": -10, "tags": ["LAW", "ORDER", "BORING"] },
+      "¡Sí! ¡Quiero aullar!": { "dLC": -5, "dLD": 0, "dRapport": 15, "tags": ["CHAOS", "WILD", "FUN"] },
+      "A veces me siento extraño.": { "dLC": 0, "dLD": 0, "dRapport": 5, "tags": ["NEUTRAL", "HONESTY"] }
+    }
+  },
+  "q_god_1": {
+    "id": "q_god_1",
+    "text": "¿Rezas a los dioses cuando tienes miedo? ¿Crees que te escuchan?",
+    "tags": ["PHILOSOPHICAL", "TIMID", "GENTLE"],
+    "choices": {
+      "Siempre nos protegen.": { "dLC": 10, "dLD": 10, "dRapport": -5, "tags": ["LAW", "GOD", "SAFETY"] },
+      "Los dioses han muerto.": { "dLC": -5, "dLD": -5, "dRapport": 5, "tags": ["CHAOS", "DARK", "GLOOMY"] },
+      "Depende de mí, no de ellos.": { "dLC": 0, "dLD": 0, "dRapport": 5, "tags": ["NEUTRAL", "SELF", "PROUD"] }
+    }
+  },
+  "q_solitude_1": {
+    "id": "q_solitude_1",
+    "text": "¿Es mejor estar solo en la cima de la montaña o acompañado revolcándose en el fango?",
+    "tags": ["POWER", "SOCIAL", "GLOOMY"],
+    "choices": {
+      "Solo en la cima.": { "dLC": -2, "dLD": 0, "dRapport": 5, "tags": ["POWER", "PROUD", "GLOOMY"] },
+      "Acompañado, siempre.": { "dLC": 5, "dLD": 5, "dRapport": -5, "tags": ["LIGHT", "SOCIAL", "WEAKNESS"] },
+      "Ninguna de las dos.": { "dLC": 0, "dLD": 0, "dRapport": 0, "tags": ["NEUTRAL", "SMART"] }
+    }
+  },
+  "q_dream_1": {
+    "id": "q_dream_1",
+    "text": "Los sueños son refugios perfectos donde todo es posible. ¿Por qué despertar a esta realidad gris?",
+    "tags": ["PHILOSOPHICAL", "GLOOMY", "WEIRD"],
+    "choices": {
+      "La realidad es la verdad.": { "dLC": 5, "dLD": 0, "dRapport": -5, "tags": ["LAW", "REALITY", "SERIOUS"] },
+      "Prefiero vivir soñando.": { "dLC": -5, "dLD": -2, "dRapport": 5, "tags": ["CHAOS", "FUN", "ESCAPISM"] },
+      "Para hacer realidad mis sueños.": { "dLC": 0, "dLD": 5, "dRapport": 10, "tags": ["LIGHT", "HOPE", "AMBITION"] }
+    }
+  },
+  "q_rule_1": {
+    "id": "q_rule_1",
+    "text": "Son las 3 de la mañana. No hay nadie en la calle. El semáforo está en rojo. ¿Cruzas?",
+    "tags": ["MORAL", "SMART", "DIRECT"],
+    "choices": {
+      "Espero a que cambie a verde.": { "dLC": 10, "dLD": 0, "dRapport": -10, "tags": ["LAW", "ORDER", "BORING"] },
+      "Cruzo sin dudar.": { "dLC": -5, "dLD": 0, "dRapport": 5, "tags": ["CHAOS", "FREEDOM", "DIRECT"] },
+      "Miro bien y luego cruzo.": { "dLC": 0, "dLD": 0, "dRapport": 5, "tags": ["NEUTRAL", "SMART"] }
+    }
+  },
+  "q_mercy_1": {
+    "id": "q_mercy_1",
+    "text": "Tu enemigo cae de rodillas, derrotado, y suplica por su vida. ¿Qué haces?",
+    "tags": ["POWER", "MORAL", "AGGRESSIVE"],
+    "choices": {
+      "Lo remato. Sin testigos.": { "dLC": -5, "dLD": -10, "dRapport": 10, "tags": ["DARK", "VIOLENCE", "DIRECT"] },
+      "Le perdono la vida.": { "dLC": 5, "dLD": 10, "dRapport": -10, "tags": ["LIGHT", "MERCY", "HONOR"] },
+      "Le exijo todo su dinero.": { "dLC": 0, "dLD": -2, "dRapport": 5, "tags": ["CUNNING", "MONEY", "SMART"] }
+    }
+  },
+  "q_lie_1": {
+    "id": "q_lie_1",
+    "text": "¿Qué prefieres: una mentira dulce que te haga feliz, o una verdad amarga que te destroce?",
+    "tags": ["PHILOSOPHICAL", "SADNESS", "SOCIAL"],
+    "choices": {
+      "La verdad ante todo.": { "dLC": 5, "dLD": 0, "dRapport": -5, "tags": ["LAW", "HONESTY", "BRAVE"] },
+      "Dame la mentira dulce.": { "dLC": -2, "dLD": 0, "dRapport": 5, "tags": ["CHAOS", "COMFORT", "WEAKNESS"] },
+      "Depende de quién la diga.": { "dLC": 0, "dLD": 0, "dRapport": 0, "tags": ["NEUTRAL", "SMART"] }
+    }
+  },
+  "q_end_1": {
+    "id": "q_end_1",
+    "text": "Si el mundo se acaba mañana y solo queda una ración de comida... ¿la compartes?",
+    "tags": ["SURVIVAL", "SCARED", "MORAL"],
+    "choices": {
+      "Sí, moriremos juntos.": { "dLC": 5, "dLD": 10, "dRapport": -5, "tags": ["LIGHT", "SOCIAL", "KIND"] },
+      "No, es mía.": { "dLC": -5, "dLD": -5, "dRapport": 5, "tags": ["DARK", "GREED", "SURVIVAL"] },
+      "Peleo por ella.": { "dLC": -2, "dLD": 0, "dRapport": 5, "tags": ["CHAOS", "FIGHT", "COMPETITION"] }
+    }
+  },
+  "q_fight_1": {
+    "id": "q_fight_1",
+    "text": "Músculos de acero o magia explosiva... ¿Cuál es el verdadero poder?",
+    "tags": ["POWER", "AGGRESSIVE", "DIRECT"],
+    "choices": {
+      "La fuerza física bruta.": { "dLC": 0, "dLD": 0, "dRapport": 5, "tags": ["POWER", "BODY"] },
+      "La magia arcana.": { "dLC": 0, "dLD": 0, "dRapport": 5, "tags": ["SMART", "MAGIC"] },
+      "El dinero.": { "dLC": 0, "dLD": -5, "dRapport": 0, "tags": ["CUNNING", "MONEY"] }
+    }
+  },
+  "q_noise_1": {
+    "id": "q_noise_1",
+    "text": "¡Gah! ¡Demasiado ruido! Los humanos siempre estáis hablando. ¿Sabes disfrutar del silencio?",
+    "tags": ["IRRITABLE", "TIMID", "SOCIAL"],
+    "choices": {
+      "El silencio es oro.": { "dLC": 2, "dLD": 0, "dRapport": 10, "tags": ["QUIET", "PEACE"] },
+      "Me gusta el bullicio.": { "dLC": -2, "dLD": 0, "dRapport": -10, "tags": ["UPBEAT", "LOUD", "SOCIAL"] },
+      "Solo cuando duermo.": { "dLC": 0, "dLD": 0, "dRapport": 0, "tags": ["NEUTRAL", "JOKE"] }
+    }
+  },
+  "q_human_1": {
+    "id": "q_human_1",
+    "text": "Vosotros los humanos sois bolsas de carne frágiles. Si te corto, sangras. ¿Por qué te crees especial?",
+    "tags": ["BODY", "AGGRESSIVE", "WEIRD"],
+    "choices": {
+      "Tengo un alma inmortal.": { "dLC": 5, "dLD": 5, "dRapport": 0, "tags": ["LIGHT", "SPIRIT", "PROUD"] },
+      "Soy más listo que tú.": { "dLC": 0, "dLD": 0, "dRapport": -5, "tags": ["SMART", "CHALLENGE"] },
+      "No soy especial, solo sobrevivo.": { "dLC": 0, "dLD": 0, "dRapport": 10, "tags": ["NEUTRAL", "HONESTY"] }
+    }
+  },
+  "q_mirror_1": {
+    "id": "q_mirror_1",
+    "text": "Cuando te miras al espejo... ¿ves a un héroe, a un monstruo o a un don nadie?",
+    "tags": ["PHILOSOPHICAL", "GLOOMY", "SCARED"],
+    "choices": {
+      "Veo a un héroe de la justicia.": { "dLC": 5, "dLD": 5, "dRapport": -10, "tags": ["LAW", "PROUD", "HOPE"] },
+      "Veo a un demonio en potencia.": { "dLC": -5, "dLD": -5, "dRapport": 10, "tags": ["CHAOS", "DARK", "POWER"] },
+      "Solo veo mi cara.": { "dLC": 0, "dLD": 0, "dRapport": 5, "tags": ["NEUTRAL", "REALIST"] }
+    }
+  },
+  "q_betray_1": {
+    "id": "q_betray_1",
+    "text": "Si tu mejor amigo se interpone en tu camino hacia la gloria... ¿qué haces?",
+    "tags": ["SOCIAL", "POWER", "TRICK"],
+    "choices": {
+      "Lo convenzo para que se una.": { "dLC": 0, "dLD": 5, "dRapport": 0, "tags": ["LIGHT", "SOCIAL", "SMART"] },
+      "Lo elimino. Nada me detendrá.": { "dLC": -5, "dLD": -10, "dRapport": 10, "tags": ["DARK", "VIOLENCE", "AMBITION"] },
+      "Abandono la gloria.": { "dLC": 5, "dLD": 0, "dRapport": -20, "tags": ["LAW", "WEAKNESS", "LOYALTY"] }
+    }
+  },
+  "q_city_1": {
+    "id": "q_city_1",
+    "text": "Esta ciudad de cemento y neón... es una jaula o un paraíso. ¿Tú qué ves?",
+    "tags": ["SOCIAL", "PHILOSOPHICAL", "MODERN"],
+    "choices": {
+      "Es una jaula de esclavos.": { "dLC": -5, "dLD": 0, "dRapport": 5, "tags": ["CHAOS", "GLOOMY"] },
+      "Es un triunfo del orden humano.": { "dLC": 5, "dLD": 0, "dRapport": -5, "tags": ["LAW", "ORDER", "PROUD"] },
+      "Es mi coto de caza.": { "dLC": 0, "dLD": -5, "dRapport": 5, "tags": ["AGGRESSIVE", "WILD"] }
+    }
+  },
+  "q_sanity_1": {
+    "id": "q_sanity_1",
+    "text": "¿Alguna vez has escuchado voces que no están ahí? Te dicen la verdad, ¿sabes?",
+    "tags": ["WEIRD", "SCARED", "TRICK"],
+    "choices": {
+      "Las escucho todo el tiempo.": { "dLC": -2, "dLD": -5, "dRapport": 10, "tags": ["WEIRD", "CHAOS"] },
+      "Necesitas ayuda profesional.": { "dLC": 2, "dLD": 0, "dRapport": -10, "tags": ["LAW", "RUDE", "SERIOUS"] },
+      "Solo escucho mi propia voz.": { "dLC": 0, "dLD": 0, "dRapport": 0, "tags": ["NEUTRAL", "SANITY"] }
+    }
+  },
+  "q_leader_1": {
+    "id": "q_leader_1",
+    "text": "Un verdadero líder... ¿debe ser amado por su pueblo o temido por sus enemigos?",
+    "tags": ["POWER", "SOCIAL", "POLITICS"],
+    "choices": {
+      "Debe ser temido.": { "dLC": -5, "dLD": -5, "dRapport": 5, "tags": ["DARK", "POWER", "FEAR"] },
+      "Debe ser amado y justo.": { "dLC": 5, "dLD": 5, "dRapport": -5, "tags": ["LIGHT", "KIND", "LEADERSHIP"] },
+      "Debe ser eficiente.": { "dLC": 0, "dLD": 0, "dRapport": 5, "tags": ["NEUTRAL", "SMART"] }
+    }
+  },
+  "q_past_1": {
+    "id": "q_past_1",
+    "text": "El pasado es una cadena pesada. ¿Cargas con tus errores o los olvidas y avanzas?",
+    "tags": ["SADNESS", "PHILOSOPHICAL", "TIMID"],
+    "choices": {
+      "Mis errores me definen.": { "dLC": 0, "dLD": 2, "dRapport": 5, "tags": ["LIGHT", "HONOR", "SADNESS"] },
+      "Destruyo el pasado.": { "dLC": -5, "dLD": 0, "dRapport": 5, "tags": ["CHAOS", "DESTRUCTION"] },
+      "No miro atrás.": { "dLC": 0, "dLD": 0, "dRapport": 0, "tags": ["NEUTRAL", "FORWARD"] }
+    }
+  },
+  "q_burn_1": {
+    "id": "q_burn_1",
+    "text": "Fuego... El fuego purifica. Si pudieras quemar una cosa para siempre, ¿qué sería?",
+    "tags": ["AGGRESSIVE", "DESTRUCTION", "POWER"],
+    "choices": {
+      "La maldad de este mundo.": { "dLC": 5, "dLD": 5, "dRapport": -5, "tags": ["LAW", "JUSTICE"] },
+      "Las leyes y ataduras.": { "dLC": -5, "dLD": 0, "dRapport": 10, "tags": ["CHAOS", "FREEDOM"] },
+      "Mi lista de deudas.": { "dLC": 0, "dLD": 0, "dRapport": 5, "tags": ["FUN", "MONEY"] }
+    }
+  },
+  "q_knowledge_1": {
+    "id": "q_knowledge_1",
+    "text": "Saberlo todo es aburrido. El misterio es lo que da sabor a la vida. ¿No crees?",
+    "tags": ["SMART", "FUN", "TRICK"],
+    "choices": {
+      "La ignorancia es felicidad.": { "dLC": 0, "dLD": -2, "dRapport": 5, "tags": ["NAIVE", "BORING"] },
+      "Yo quiero saberlo todo.": { "dLC": 0, "dLD": 0, "dRapport": -5, "tags": ["SMART", "SERIOUS"] },
+      "Me gustan las sorpresas.": { "dLC": 0, "dLD": 0, "dRapport": 10, "tags": ["UPBEAT", "FUN"] }
+    }
+  },
+  "q_shadow_1": {
+    "id": "q_shadow_1",
+    "text": "Tu sombra se mueve raro... Creo que intenta apuñalarte por la espalda. ¡Cuidado!",
+    "tags": ["SCARED", "WEIRD", "PARANOIA"],
+    "choices": {
+      "¡Atrás, demonio!": { "dLC": 0, "dLD": 0, "dRapport": -5, "tags": ["SCARED", "NAIVE"] },
+      "Mi sombra y yo somos uno.": { "dLC": -2, "dLD": -2, "dRapport": 10, "tags": ["DARK", "WEIRD"] },
+      "Deja de decir tonterías.": { "dLC": 2, "dLD": 0, "dRapport": -10, "tags": ["DIRECT", "RUDE"] }
+    }
+  },
+  "q_treasure_1": {
+    "id": "q_treasure_1",
+    "text": "¿Qué es más valioso? ¿Una montaña de oro o el secreto de la vida eterna?",
+    "tags": ["VALUE", "GREED", "PHILOSOPHICAL"],
+    "choices": {
+      "El oro. La eternidad cansa.": { "dLC": 0, "dLD": -5, "dRapport": 5, "tags": ["CUNNING", "MONEY", "REALIST"] },
+      "La vida eterna.": { "dLC": 0, "dLD": 0, "dRapport": 5, "tags": ["POWER", "AMBITION"] },
+      "Ninguno, prefiero el amor.": { "dLC": 5, "dLD": 5, "dRapport": -10, "tags": ["LIGHT", "KIND"] }
+    }
+  },
+  "q_monster_1": {
+    "id": "q_monster_1",
+    "text": "¿Quién es el verdadero monstruo? ¿Nosotros que comemos carne, o vosotros que destruís el planeta?",
+    "tags": ["MORAL", "PHILOSOPHICAL", "AGGRESSIVE"],
+    "choices": {
+      "Los humanos somos el virus.": { "dLC": -5, "dLD": -5, "dRapport": 10, "tags": ["GLOOMY", "MISANTHROPY"] },
+      "Nosotros creamos civilización.": { "dLC": 5, "dLD": 0, "dRapport": -10, "tags": ["LAW", "PROUD"] },
+      "Todos somos monstruos.": { "dLC": 0, "dLD": 0, "dRapport": 5, "tags": ["NEUTRAL", "EQUAL"] }
+    }
+  },
+  "q_dance_1": {
+    "id": "q_dance_1",
+    "text": "¡El ritmo del cosmos me obliga a bailar! ¿Bailas conmigo?",
+    "tags": ["FUN", "UPBEAT", "WEIRD"],
+    "choices": {
+      "¡Sí! ¡Bailemos!": { "dLC": -2, "dLD": 0, "dRapport": 15, "tags": ["CHAOS", "FUN", "ENERGY"] },
+      "No tengo tiempo para esto.": { "dLC": 2, "dLD": 0, "dRapport": -10, "tags": ["LAW", "BORING", "WORK"] },
+      "Solo si me enseñas.": { "dLC": 0, "dLD": 0, "dRapport": 5, "tags": ["NEUTRAL", "POLITE"] }
+    }
+  },
+  "q_egg_mirto": {
+    "id": "q_egg_mirto",
+    "text": "Ves a Mirto: ¿qué haces?",
+    "tags": ["EASTER_EGG", "AGGRESSIVE", "FUN"],
+    "choices": {
+      "Envenenarlo.": { "dLC": -5, "dLD": -5, "dRapport": 50, "tags": ["CHAOS", "VIOLENCE"] },
+      "Saludarlo.": { "dLC": 5, "dLD": 0, "dRapport": -50, "tags": ["LAW", "POLITE"] }
+    }
+  },
+  "q_egg_luigi": {
+    "id": "q_egg_luigi",
+    "text": "¿Has escuchado? Se dice que los Hermanos Jack hicieron un despelote en un juego de mafia.",
+    "tags": ["EASTER_EGG", "SOCIAL", "FUN"],
+    "choices": {
+      "Sí, todo fue culpa de Luigi.": { "dLC": 0, "dLD": 0, "dRapport": 50, "tags": ["FUN", "JOKE"] },
+      "No sé de qué me hablas.": { "dLC": 0, "dLD": 0, "dRapport": 0, "tags": ["BORING"] },
+      ":v": { "dLC": 0, "dLD": 0, "dRapport": -20, "tags": ["WEIRD"] }
+    }
+  },
+  "q_egg_rocio": {
+    "id": "q_egg_rocio",
+    "text": "¿En quién quieres actuar?",
+    "tags": ["EASTER_EGG", "WEIRD"],
+    "choices": {
+      "Rocío.": { "dLC": 0, "dLD": 0, "dRapport": 0, "tags": ["WEIRD"] },
+      "Rocío...": { "dLC": 0, "dLD": 0, "dRapport": 0, "tags": ["SADNESS"] },
+      "¡Rocío!": { "dLC": 0, "dLD": 0, "dRapport": 0, "tags": ["ENERGY"] }
+    }
+  },
+  "q_egg_caraballo": {
+    "id": "q_egg_caraballo",
+    "text": "¿Quiere que le cuente el cuento de la Loca Luz Caraballo?",
+    "tags": ["EASTER_EGG", "FUN", "WEIRD"],
+    "choices": {
+      "De Cachopo a Apartadero caminas, Luz Caraballo...": { "dLC": 0, "dLD": 0, "dRapport": 10, "tags": ["FUN", "CULTURE"] },
+      "No.": { "dLC": 0, "dLD": 0, "dRapport": -50, "tags": ["RUDE", "BORING"] },
+      "Suéltame, niño.": { "dLC": 0, "dLD": 0, "dRapport": -50, "tags": ["AGGRESSIVE"] }
+    }
+  },
+  "q_egg_hypothesis": {
+    "id": "q_egg_hypothesis",
+    "text": "Hola. ¿Ya has leído mi hipótesis?",
+    "tags": ["EASTER_EGG", "SMART", "SOCIAL"],
+    "choices": {
+      "Claro, ¡qué interesante!": { "dLC": 0, "dLD": 0, "dRapport": -15, "tags": ["POLITE", "SMART"] },
+      "Suélteme el brazo, señora.": { "dLC": 0, "dLD": 0, "dRapport": 15, "tags": ["RUDE", "DIRECT"] }
+    }
+  },
+  "q_egg_sombra": {
+    "id": "q_egg_sombra",
+    "text": "Estuve jugando a un Fnaf fangame que tenía pendiente, yo era una mente colectiva de cabezas flotantes, esto de tener cosas del SMT es desmadre.",
+    "tags": ["EASTER_EGG", "WEIRD", "FUN"],
+    "choices": {
+      "Sombra lpm.": { "dLC": 0, "dLD": 0, "dRapport": 0, "tags": ["JOKE"] },
+      "Sombra lpm...": { "dLC": 0, "dLD": 0, "dRapport": 0, "tags": ["SADNESS"] },
+      "Sombra lpm!": { "dLC": 0, "dLD": 0, "dRapport": 0, "tags": ["ANGRY"] }
     }
   }
-]
+}

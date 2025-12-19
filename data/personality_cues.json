@@ -1,7 +1,65 @@
 {
-  "PLAYFUL":  { "Delighted": "*giggles*", "Pleased": "*smiles*", "Neutral": "…", "Annoyed": "*pouts*", "Enraged": "*throws a tantrum*" },
-  "CHILDISH": { "Delighted": "*claps*",   "Pleased": "*grins*",  "Neutral": "…", "Annoyed": "*whines*", "Enraged": "*cries loudly*" },
-  "MOODY":    { "Delighted": "*smirks*",  "Pleased": "*nods*",   "Neutral": "…", "Annoyed": "*glares*", "Enraged": "*snaps*" },
-  "CUNNING":  { "Delighted": "*grins slyly*", "Pleased": "*chuckles*", "Neutral": "…", "Annoyed": "*narrows eyes*", "Enraged": "*hisses*" },
-  "PROUD":    { "Delighted": "*nods approvingly*", "Pleased": "*smiles faintly*", "Neutral": "…", "Annoyed": "*scoffs*", "Enraged": "*looks insulted*" }
+  "DEFAULT": {
+    "HAPPY": "Parece satisfecho.",
+    "INTERESTED": "Te mira con curiosidad.",
+    "NEUTRAL": "Te observa sin expresión.",
+    "BORED": "Bosteza.",
+    "ANGRY": "Te mira con desprecio."
+  },
+  "UPBEAT": {
+    "HAPPY": "¡Da un saltito de alegría!",
+    "INTERESTED": "¡Sus ojos brillan de emoción!",
+    "NEUTRAL": "Tararea una melodía esperando.",
+    "BORED": "Empieza a mirar a otro lado distraídamente.",
+    "ANGRY": "Hace un puchero y se cruza de brazos."
+  },
+  "TIMID": {
+    "HAPPY": "Sonríe tímidamente y se relaja.",
+    "INTERESTED": "Se asoma con cautela, escuchando.",
+    "NEUTRAL": "Tiembla ligeramente.",
+    "BORED": "Parece querer irse a casa...",
+    "ANGRY": "¡Se encoge de miedo y chilla!"
+  },
+  "IRRITABLE": {
+    "HAPPY": "Gruñe en aprobación. 'No está mal'.",
+    "INTERESTED": "Deja de gritar y presta atención.",
+    "NEUTRAL": "Golpea el suelo con impaciencia.",
+    "BORED": "¿Vas a seguir hablando? Qué aburrimiento.",
+    "ANGRY": "¡Enseña los dientes y aprieta los puños!"
+  },
+  "GLOOMY": {
+    "HAPPY": "Suelta un suspiro... de alivio.",
+    "INTERESTED": "Levanta la mirada lentamente.",
+    "NEUTRAL": "Mira al vacío con ojos muertos.",
+    "BORED": "Suspira profundamente. 'Qué vida tan larga...'",
+    "ANGRY": "Murmura maldiciones por lo bajo."
+  },
+  "CUNNING": {
+    "HAPPY": "Sonríe maliciosamente. 'Je, interesante...'",
+    "INTERESTED": "Se frota las manos calculando el valor.",
+    "NEUTRAL": "Te analiza buscando debilidades.",
+    "BORED": "Examina sus uñas, desinteresado.",
+    "ANGRY": "Te mira con frialdad calculadora."
+  },
+  "AGGRESSIVE": {
+    "HAPPY": "¡Jaja! ¡Así se habla!",
+    "INTERESTED": "Se inclina hacia adelante, desafiante.",
+    "NEUTRAL": "Respira pesadamente.",
+    "BORED": "Escupe al suelo.",
+    "ANGRY": "¡Ruge de furia listo para atacar!"
+  },
+  "PLAYFUL": {
+    "HAPPY": "¡Ríe y da vueltas en el aire!",
+    "INTERESTED": "¿Un juego nuevo? ¡Cuéntame más!",
+    "NEUTRAL": "Flota boca abajo mirándote.",
+    "BORED": "Hace burbujas con la boca, ignorándote.",
+    "ANGRY": "Te saca la lengua y te hace una mueca."
+  },
+  "PROUD": {
+    "HAPPY": "Asiente con dignidad y una leve sonrisa.",
+    "INTERESTED": "Te mira con cierto respeto.",
+    "NEUTRAL": "Mantiene una postura regia e inamovible.",
+    "BORED": "Te mira por encima del hombro.",
+    "ANGRY": "¡¿Cómo osas?! Su orgullo ha sido herido."
+  }
 }

@@ -1,190 +1,305 @@
 from __future__ import annotations
-from typing import List, Optional
-import time
+from typing import List, Dict, Any
 
-from drlite.models import Demon
+from drlite.models import Demon, ItemEffect
 from drlite.engine.session import NegotiationSession
 from drlite.persistence.io import save_game
-from drlite.config import ROUND_DELAY_SEC
 
-# Import UI components from console (which handles the visual layer)
+# Import tools from console.py
 from drlite.ui.console import (
-    show_menu, 
-    dispatch_action, 
-    ask_yes_no, 
-    ask_pay, 
-    ask_give_item, 
     clear_screen, 
-    rapport_gauge
+    print_header, 
+    print_rapport_bar, 
+    print_dex_card, 
+    wait_enter,
+    ask_yes_no,
+    _style, 
+    print_separator
 )
+
+# ==============================================================================
+#  MENUS (Spanish Text)
+# ==============================================================================
+
+def menu_inventory(session: NegotiationSession) -> None:
+    """Displays inventory and handles item usage."""
+    while True:
+        clear_screen()
+        print_header(session.player, session.demon)
+        print(f"\n{_style('--- INVENTARIO ---', 'BOLD')}\n")
+        
+        if not session.player.inventory:
+            print(" (Vacío)")
+            wait_enter("[Enter] Volver")
+            return
+
+        # Build list
+        item_list = []
+        for i, (item_id, qty) in enumerate(session.player.inventory.items()):
+            item_def = session.items_catalog.get(item_id)
+            if not item_def: continue
+            
+            # Formatting
+            name = _style(item_def.display_name, "WHITE")
+            tag = ""
+            if item_def.consumable:
+                if item_def.effect_type != ItemEffect.NONE:
+                    tag = _style(" [USAR]", "GREEN")
+                else:
+                    tag = _style(" [TRADEO]", "GREY")
+            
+            print(f" {i+1}. {name} x{qty}{tag}")
+            print(f"    {_style(item_def.description, 'GREY')}")
+            item_list.append((item_id, item_def))
+
+        print(f" 0. Volver")
+
+        choice = input("\nSelecciona objeto > ").strip()
+        if choice == '0': return
+
+        try:
+            idx = int(choice) - 1
+            if 0 <= idx < len(item_list):
+                item_id, item_def = item_list[idx]
+                
+                if not item_def.consumable or item_def.effect_type == ItemEffect.NONE:
+                    print(f"\n[Sistema] No puedes usar este objeto ahora.")
+                    wait_enter()
+                else:
+                    used, msg = session.player.use_item(item_id, item_def)
+                    color = "GREEN" if used else "RED"
+                    print(f"\n[Sistema] {_style(msg, color)}")
+                    wait_enter()
+        except ValueError:
+            pass
+
+def menu_roster(session: NegotiationSession) -> None:
+    """Displays Compendium."""
+    while True:
+        clear_screen()
+        print(f"\n{_style('--- COMPENDIO DE DEMONIOS ---', 'BOLD')}\n")
+        
+        if not session.player.roster:
+            print(" (Aún no has reclutado a nadie)")
+            wait_enter()
+            return
+
+        # List Names
+        for i, d in enumerate(session.player.roster):
+            print(f" {i+1}. {d.name}")
+        
+        print("\n 0. Volver")
+        
+        choice = input("\nVer Detalles > ").strip()
+        if choice == '0': return
+        
+        try:
+            idx = int(choice) - 1
+            if 0 <= idx < len(session.player.roster):
+                # Show the Card
+                clear_screen()
+                selected_demon = session.player.roster[idx]
+                print_dex_card(selected_demon)
+                wait_enter()
+        except ValueError:
+            pass
+
+def menu_help() -> None:
+    clear_screen()
+    print(_style("--- AYUDA ---", "BOLD"))
+    print("1. HABLAR: Elige respuestas que coincidan con la personalidad del Demonio.")
+    print("2. OBJETO: Usa objetos para curar HP/MP.")
+    print("3. SOBORNAR: Paga Macca para saltar la charla. (Chance depende de Rareza).")
+    print("4. HUIR: Escapa del combate (Puedes recibir daño).")
+    wait_enter()
+
+# ==============================================================================
+#  GAME FLOW
+# ==============================================================================
+
+def run_pre_negotiation(session: NegotiationSession) -> bool:
+    """Lobby Phase."""
+    while True:
+        clear_screen()
+        print_separator("=")
+        print(f" ¡Un {_style(session.demon.name, 'RED')} Salvaje apareció!".center(70))
+        print_separator("=")
+        
+        print_header(session.player, None)
+        
+        print("\n[ FASE DE PREPARACIÓN ]")
+        print(" 1. LUCHAR (Iniciar Negociación)")
+        print(" 2. INVENTARIO")
+        print(" 3. COMPENDIO")
+        print(" 4. AYUDA")
+
+        choice = input("\n> ").strip()
+        if choice == '1': return True
+        elif choice == '2': menu_inventory(session)
+        elif choice == '3': menu_roster(session)
+        elif choice == '4': menu_help()
 
 def run_game_loop(
     session: NegotiationSession, 
-    diff_level: int, 
-    demons_catalog: list[Demon],
-    user_id: str,
-    weights: dict,
-    whims: list,
-    cues: dict,
-    events_registry: dict,
-    whim_config: dict) -> None:
-    """
-    Main synchronous game loop for the CLI.
-    
-    Orchestrates the flow:
-    1. Render UI (Clear screen + Status)
-    2. Check for Whims (Random events)
-    3. Show Menu & Dispatch Action
-    4. Validate Logic (Union, Fled, Time)
-    5. Auto-save
-    """
-    
-    # Apply difficulty settings to the session constraints
-    session.difficulty(diff_level)
-    
-    # Determine delay for pacing
-    try:
-        delay = ROUND_DELAY_SEC
-    except NameError:
-        delay = 0
+    difficulty: str,
+    demons_catalog: List[Demon],
+    weights: Dict,
+    whims: List,
+    cues: Dict,
+    events_registry: Dict,
+    whim_config: Dict):
 
-    try:
-        while session.in_progress:
-            # --- 1. UI REFRESH ---
-            clear_screen()
-            p = session.player
-            print(f"--- RONDA {session.round_no} | {p.name} Lv.{p.lvl} ---")
-            print(f"HP: {p.hp}/{p.max_hp}  |  MP: {p.mp}/{p.max_mp}  |  Macca: {p.gold}")
-            print(f"XP: {p.exp}/{p.exp_next}")
-            print("-" * 40 + "\n")
-            
-            # Status Bar
-            # We use the visual gauge for rapport
-            print(f"Turnos: {session.turns_left} | Rapport: {rapport_gauge(session.rapport)}")
-            print(f"Demonio: {session.demon.name} (Rara: {session.demon.rarity.name})")
-            print("-" * 40)
-            
-            # --- 2. WHIMS (Random Events) ---
-            # Check if the demon wants something before the main action
-            whim_payload = session.maybe_trigger_whim(whims, whim_config)
-            
-            if whim_payload:
-                print("\n[!] ¡El demonio quiere algo antes de continuar!")
-                # Pass UI callbacks so the engine can ask the user questions
-                result = session.process_event(
-                    whim_payload,
-                    ask_yes_no=ask_yes_no,
-                    ask_pay=ask_pay,
-                    ask_give_item=ask_give_item
+    # 1. Lobby
+    if not run_pre_negotiation(session): return
+
+    # 2. Logic Helpers (Callbacks for Engine)
+    
+    def cb_pay(amount: int, current: int) -> bool:
+        print(f" [Pide: {amount} Macca | Tienes: {current}]")
+        return ask_yes_no("¿Pagar la cantidad?")
+
+    def cb_give(item_id: str, qty: int, current: int) -> bool:
+        print(f" [Pide: {qty}x {item_id} | Tienes: {current}]")
+        return ask_yes_no("¿Entregar objeto?")
+    
+    # 3. Main Loop
+    while session.in_progress:
+        clear_screen()
+        print_header(session.player, session.demon, session.round_no, session.max_rounds)
+        print_rapport_bar(session.rapport, session.demon.rapport_needed)
+
+        # --- EVENT TRIGGER (Whims) ---
+        if session.rng.random() < whim_config.get("base_chance", 0.1):
+            whim_id = session.trigger_whim(whims, whim_config)
+            if whim_id:
+                res = session.process_event(
+                    {"id": whim_id}, 
+                    ask_yes_no, 
+                    cb_pay,     
+                    cb_give     
                 )
+                print(f"\n> {res.message}")
+                wait_enter()
                 
-                # Feedback from the event
-                if result.message:
-                    print(f">> {result.message}")
-                    input("(Presiona Enter...)")
-                
-                # If the event ended the session (e.g., fatal trap), break immediately
-                if not session.in_progress:
-                    break
+                session.check_union()
+                if not session.in_progress: break
+                continue
 
-            # --- 3. MENU / ACTION ---
-            option = show_menu(session)
-            
-            if option == "0":
-                # Fallback exit
-                break 
+        # --- MENU ---
+        print(f"\n{_style('[ ACCIONES ]', 'BOLD')}")
+        print(" 1. HABLAR")
+        print(" 2. OBJETO")
+        print(" 3. SOBORNAR")
+        print(" 4. HUIR")
+        
+        action = input("\n> ").strip()
 
-            # Dispatch the chosen option (1=Talk, 2=Flee, 3=Analyze)
-            # We pass all injected data catalogs to the dispatch function
-            dispatch_action(session, option, demons_catalog, weights, cues, events_registry)
-
-            # --- 4. POST-TURN CHECKS ---
-            # Check if recruitment conditions are met
-            session.check_union()
-            
-            # If the game ended in this turn, stop the loop
-            if not session.in_progress:
+        if action == '1': # TALK
+            q = session.pick_question()
+            if not q:
+                print(f"\n[{session.demon.name}] Se me acabaron las preguntas...")
+                session.turns_left = 0
+                session.check_union()
                 break
-            
-            # Advance round counter
-            session.round_no += 1
-            
-            # Optional pacing delay
-            if delay > 0:
-                time.sleep(delay)
-            
-            # Autosave state for safety (persists items/gold changes)
-            save_game(user_id, session.player, demons_catalog, session)
 
-    except (KeyboardInterrupt, EOFError):
-        print("\n\n[Sistema] Juego interrumpido por el usuario.")
-        session.in_progress = False
-        # Save on exit
-        save_game(user_id, session.player, demons_catalog, session)
+            print(f"\n[{_style(session.demon.name, 'RED')}]: {q.text}")
+            
+            # Print Options
+            print("")
+            valid_opts = []
+            for i, (txt, _) in enumerate(q.responses):
+                print(f" {i+1}) {txt}")
+                valid_opts.append(str(i+1))
+            
+            # Answer
+            ans_idx = -1
+            while True:
+                sel = input("\nRespuesta > ").strip()
+                if sel in valid_opts:
+                    ans_idx = int(sel) - 1
+                    break
+            
+            feedback = session.process_answer(q, ans_idx, cues, weights)
+            
+            # Feedback Tone Translation
+            tone_es = feedback.tone
+            tone_color = "WHITE"
+            if feedback.tone == "HAPPY": 
+                tone_es = "FELIZ"
+                tone_color = "GREEN"
+            elif feedback.tone == "ANGRY": 
+                tone_es = "ENFADADO"
+                tone_color = "RED"
+            elif feedback.tone == "INTERESTED":
+                tone_es = "INTERESADO"
+                tone_color = "YELLOW"
+            elif feedback.tone == "BORED":
+                tone_es = "ABURRIDO"
+                tone_color = "BLUE"
+            
+            print(f"\n> ¡Parece {_style(tone_es, tone_color)}!")
+            wait_enter()
+            session.check_union()
 
-    # === END OF SESSION SUMMARY ===
-    handle_end_game(session, user_id, demons_catalog)
+        elif action == '2': # ITEM
+            menu_inventory(session)
 
-def handle_end_game(session: NegotiationSession, user_id: str, demons_catalog: list[Demon]) -> None:
-    """
-    Displays the final result screen, prints stats summary, and performs the final save.
-    Replaces the old 'summarize_session' logic.
-    """
+        elif action == '3': # BRIBE
+            msg = session.attempt_bribe()
+            # Assuming msg comes in English from engine, you might want to wrap translation there or here.
+            # For now, printing system msg directly.
+            print(f"\n[Sistema] {msg}")
+            wait_enter()
+            session.check_union()
+
+        elif action == '4': # FLEE
+            msg = session.attempt_flee()
+            print(f"\n[Sistema] {msg}")
+            wait_enter()
+
+    # 4. End
+    safe_uid = "".join(x for x in session.player.name if x.isalnum() or x in "_").lower()
+    if not safe_uid: safe_uid = "player"
+    handle_end_game(session, safe_uid, demons_catalog)
+
+# In drlite/ui/gameplay.py
+
+def handle_end_game(session: NegotiationSession, user_id: str, demons_catalog: List[Demon]):
+    # 1. APPLY DEATH PENALTY (If applicable) BEFORE SAVING
+    if session.player.hp <= 0:
+        penalty_res = session.player.apply_death_penalty()
+        
+        # We print the death logic here so it appears before the "Session Ended" screen
+        clear_screen()
+        print_header(session.player, session.demon)
+        print(f"\n{_style('=== HAS MUERTO ===', 'RED')}")
+        
+        if penalty_res == "LEVEL_DOWN":
+            print(f"\n[Sanción] Tu alma ha sido reconstruida, pero a un costo.")
+            print(f"Has bajado al Nivel {session.player.lvl}.")
+        else: # GAME_OVER
+            print(f"\n[Game Over] Apenas lograste escapar con vida.")
+            print("Tu experiencia acumulada se ha perdido.")
+        
+        wait_enter()
+
+    # 2. SAVE GAME
+    save_game(user_id, session.player, demons_catalog, session)
+
+    # 3. SHOW SUMMARY
     clear_screen()
-    print("=== FIN DE LA NEGOCIACIÓN ===\n")
-    
-    outcome_msg = ""
-
-    player = session.player
+    print_header(session.player, session.demon)
+    print("\n" + "="*40)
+    print(" SESIÓN FINALIZADA ".center(40, " "))
+    print("="*40)
     
     if session.recruited:
-        if player.has_demon(session.demon.id):
-            pass
-        else:
-            print(f"\n¡ÉXITO! {session.demon.name} se ha unido a tu equipo!")
-            player.roster.append(session.demon)
-        
-        # 2. Add to Player Roster (Memory)
-        # Check duplicates just in case, though session.check_union handles logic
-        # We ensure we append the object, not just the ID, for consistency
-        already_in_roster = any(d.id == session.demon.id for d in session.player.roster)
-        if not already_in_roster:
-            session.player.roster.append(session.demon)
-        
+        print(f"\n{_style('¡VICTORIA!', 'GREEN')} {session.demon.name} se unió a ti.")
     elif session.fled:
-        outcome_msg = "HUIDA"
-        print("Huiste de la negociación.")
-        
-    else:
-        outcome_msg = "FRACASO"
-        # Failed negotiation (Rapport too low or turns run out)
-        print(f"{session.demon.name} se ha marchado.")
-        print("No lograste convencerle a tiempo.")
-    
-    # --- 3. Final Save (Disk) ---
-    # We save regardless of outcome to persist inventory changes, turn usage, etc.
-    save_game(user_id, session.player, demons_catalog, None)
-    
-    # --- 4. Print Statistics (Restored functionality) ---
-    print("\n" + "="*30)
-    print(" RESUMEN DE SESIÓN")
-    print("="*30)
-    
-    # Alignment Stats
-    core = session.player.core_alignment
-    stance = session.player.stance_alignment
-    demon_align = session.demon.alignment
-    final_dist = stance.manhattan_distance(demon_align)
-    
-    print(f"Resultado:       {outcome_msg}")
-    print(f"Rapport Final:   {session.rapport}")
-    print(f"Distancia Final: {final_dist}")
-    print(f"Rondas jugadas:  {session.round_no}")
-    print("-" * 30)
-    print(f"Tu Alineación Base:    ({core.law_chaos}, {core.light_dark})")
-    print(f"Tu Postura (Stance):   ({stance.law_chaos}, {stance.light_dark})")
-    print(f"Alineación de {session.demon.name}: ({demon_align.law_chaos}, {demon_align.light_dark})")
-    
-    # Optional: Print current roster count
-    print(f"Demonios en equipo:    {len(session.player.roster)}")
-    print("\n")
+        print(f"\n{_style('ESCAPASTE', 'YELLOW')} de la negociación.")
+    elif not session.in_progress and session.turns_left <= 0:
+        print(f"\n{_style('FALLO', 'RED')} Se acabó el tiempo.")
+    elif session.player.hp <= 0:
+        print(f"\n{_style('DERROTA', 'RED')} (Penalización aplicada).")
+
+    wait_enter("Presiona Enter para volver al título...")
