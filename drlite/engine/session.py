@@ -262,7 +262,6 @@ class NegotiationSession:
             
         # B. Personality Factor (Tags)
         tags = ensure_list_of_str(effect.get("tags", []))
-        if question.tags: tags.extend(question.tags)
         
         liked, disliked = [], []
         p_name = self.demon.personality.name if hasattr(self.demon.personality, "name") else str(self.demon.personality)
@@ -273,7 +272,10 @@ class NegotiationSession:
             if weight != 0:
                 points = int(5 * weight)
                 d_rep += points
-                (liked if weight > 0 else disliked).append(tag)
+                if weight > 0:
+                    liked.append(f"{tag}(+{points})")
+                else:
+                    disliked.append(f"{tag}({points})")
 
         # C. Variance
         if self.rng: d_rep += self.rng.randint(-1, 2)
@@ -316,7 +318,7 @@ class NegotiationSession:
         if not self.in_progress: return
         
         # Stance Check (Optional: strict distance vs tolerance)
-        stance_ok = (self.player.stance_alignment.manhattan_distance(self.demon.alignment) <= 5)
+        stance_ok = (self.player.stance_alignment.manhattan_distance(self.demon.alignment) <= 25)
         rapport_ok = (self.rapport >= self.demon.rapport_needed)
 
         if rapport_ok and stance_ok:

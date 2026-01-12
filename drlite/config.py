@@ -2,8 +2,8 @@ from __future__ import annotations
 import json, random
 from typing import Optional
 
-RAPPORT_MIN, RAPPORT_MAX = -3, 3
-AXIS_MIN, AXIS_MAX       = -5, 5
+RAPPORT_MIN, RAPPORT_MAX = -100, 100
+AXIS_MIN, AXIS_MAX       = -20, 20
 TOL_MIN, TOL_MAX         = 1, 5
 RNG_SEED: Optional[int]  = None
 ROUND_DELAY_SEC          = 0
